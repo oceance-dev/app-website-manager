@@ -1,9 +1,33 @@
+export interface Folder {
+    id: number;
+    name: string;
+    parentId: number | null;
+    createdBy: number;
+    createdAt: string;
+    permissions: FolderPermission[];
+}
+
+export interface FolderPermission {
+    userId: number;
+    role: 'viewer' | 'editor' | 'admin';
+}
+
+export interface DocumentPermission {
+    userId: number;
+    canAccess: boolean;
+}
+
 export interface Document {
     id: number;
     nameDoc: string;
+    folderId: number;
     length: string;
     date: string;
-    type: 'PDF' | 'DOCX' | 'XLSX' | 'PPTX';
+    type: 'PDF' | 'DOCX' | 'XLSX' | 'PPTX' | 'OTHER';
+    uploadedBy: number;
+    uri?: string;          // URI du fichier uploadé
+    mimeType?: string;     // Type MIME du fichier
+    permissions?: DocumentPermission[];  // Permissions d'accès au document
 }
 
 
@@ -12,16 +36,31 @@ export interface LoginData {
     password: string;
 }
 
+export interface SignData {
+    lastname: string;
+    firstname: string;
+    dateOfbirth: string;
+    sexe: number;
+    phone: string;
+    email: string;
+    emailParent: string;
+    password: string;
+    confirmPassword: string;
+    postalCode?: string;
+}
+
 export interface User {
     id: number;
     lastname: string;
     firstname: string;
     email: string;
-    role: 'Admin' | 'Encadrant' | 'Cadet';
+    role: 'SuperAdmin' | 'Admin'  | 'Président' | 'Secrétaire' | 'Trésorier' | 'Encadrant' | 'Cadet' | 'Ancien Cadet' | 'Candidat';
     statut: 'Actif' | 'Inactif';
     dateOfbirth?: string;
     sexe?: number;
     phone: string;
+    courseAccess?: boolean;
+    postalCode?: string;
 }
 
 export interface MenuItem {
@@ -29,6 +68,7 @@ export interface MenuItem {
     label: string,
     icon: string,
     screen: keyof RootStackParamList;
+    roles?: string[];
 }
 
 export type RootStackParamList = {
@@ -38,4 +78,7 @@ export type RootStackParamList = {
     Cadet: undefined;
     Statistics: undefined;
     Settings: undefined;
+    Organization: undefined;
+    Courses: undefined;
+    CandidatDocuments: undefined;
 }

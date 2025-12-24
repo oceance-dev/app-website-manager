@@ -1,9 +1,31 @@
+import { RowDataPacket } from "mysql2";
 import { pool  } from "./connection";
+
+
+async function tableExists(tableName: string): Promise<boolean> {
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    `SELECT TABLE_NAME FROM information_schema.TABLES 
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+    [tableName]
+  );
+  return rows.length > 0;
+}
+
+async function columnExists(tableName: string, columnName: string): Promise<boolean> {
+  const [rows] = await pool.execute<RowDataPacket[]>(
+    `SELECT COLUMN_NAME FROM information_schema.COLUMNS 
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+    [tableName, columnName]
+  );
+  return rows.length > 0;
+}
 
 export async function initSchema() {
     /**
      * Partie user 
      */
+    if (!await tableExists('users')) {
+
     await pool.execute(`
         CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY
@@ -25,10 +47,13 @@ export async function initSchema() {
             INDEX idx_statut (statut)
         )    
     `);
+    }
 
     /**
      * Partie candidat
      */
+    if (!tableExists('candidats')) {
+
     await pool.execute(`
         CREATE TABLE IF NOT EXISTS candidats (
             id INT AUTO_INCREMENT PRIMARY KEY
@@ -47,63 +72,70 @@ export async function initSchema() {
             INDEX idx_emailParent (emailParent)
         ) 
     `);
+    }
 
     /**
      * Partie rendez-vous
      */    
-    await pool.execute(`
-        CREATE TABLE IF NOT EXISTS appointments (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            candidat_id INT NOT NULL,
-            appointment_date DATE NOT NULL,
-            appointment_time DATE NOT NULL,
-            notes TEXT COMMENT 'Notes sur le rendez-vous',
-            created_by INT COMMENT 'ID de l\'admin qui a créé le RDV',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updatet_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    if (!tableExists('appointments')) {
+        await pool.execute(`
+            CREATE TABLE IF NOT EXISTS appointments (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                candidat_id INT NOT NULL,
+                appointment_date DATE NOT NULL,
+                appointment_time DATE NOT NULL,
+                notes TEXT COMMENT 'Notes sur le rendez-vous',
+                created_by INT COMMENT 'ID de l\'admin qui a créé le RDV',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updatet_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
-            FOREIGN KEY (candidat_id) REFERENCES candidats(id) ON DELETE CASCADE,
-            FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+                FOREIGN KEY (candidat_id) REFERENCES candidats(id) ON DELETE CASCADE,
+                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
 
-            INDEX idx_candidat (candidat_id),
-            INDEX idx_date (appointment_date)
-        )    
-    `);
+                INDEX idx_candidat (candidat_id),
+                INDEX idx_date (appointment_date)
+            )    
+        `);
+    }
     
     /**
      * Partie candidat_document
      */
-    await pool.execute(`
-       CREATE TABLE IF EXISTS candidat_document (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            candidat_id INT NOT NULL,
-            document_type ENUM(
-                'id_card', -- Pièce d'identité
-                'photo', -- Photo d'identité
-                'medical_certificate', -- Certificat médical
-                'parental_authorization', -- Autorisation parentale
-                'inscription_form', -- Formulaire d'inscription
-                'engagement_form', -- Charte d'engagement
-                'health_form', -- Fiche sanitaire
-            ) NOT NULL,
-            document_name VARCHAR(255) NOT NULL COMMENT 'Nom du fichier',
-            file_path VARCHAR(500) NOT NULL COMMENT 'Chemin du fichier sur le serveur',
-            file_size INT COMMENT 'Taille en octets',
-            mime_type VARCHAR(100),
-            category ENUM('required', 'form') NOT NULL COMMENT 'Document requis ou formulaire à compléter',
+    if (!tableExists('candidat_document')) {
+        await pool.execute(`
+        CREATE TABLE IF EXISTS candidat_document (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                candidat_id INT NOT NULL,
+                document_type ENUM(
+                    'id_card', -- Pièce d'identité
+                    'photo', -- Photo d'identité
+                    'medical_certificate', -- Certificat médical
+                    'parental_authorization', -- Autorisation parentale
+                    'inscription_form', -- Formulaire d'inscription
+                    'engagement_form', -- Charte d'engagement
+                    'health_form', -- Fiche sanitaire
+                ) NOT NULL,
+                document_name VARCHAR(255) NOT NULL COMMENT 'Nom du fichier',
+                file_path VARCHAR(500) NOT NULL COMMENT 'Chemin du fichier sur le serveur',
+                file_size INT COMMENT 'Taille en octets',
+                mime_type VARCHAR(100),
+                category ENUM('required', 'form') NOT NULL COMMENT 'Document requis ou formulaire à compléter',
 
-            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-            FOREIGN KEY (candidat_id) REFERENCES candidats(id) ON DELETE CASCADE,
-            INDEX idx_candidat (candidat_id),
-            INDEX idx_type (document_type),
-            UNIQUE KEY unique_candidat_document (candidat_id, document_type)
-       ) 
-    `);
+                FOREIGN KEY (candidat_id) REFERENCES candidats(id) ON DELETE CASCADE,
+                INDEX idx_candidat (candidat_id),
+                INDEX idx_type (document_type),
+                UNIQUE KEY unique_candidat_document (candidat_id, document_type)
+        ) 
+        `);
+    }
 
     /**
      * Partie folders 
      */
+    if (!tableExists('folders')) {
+
     await pool.execute(`
         CREATE TABLE IF EXISTS folders (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -120,34 +152,37 @@ export async function initSchema() {
             INDEX idx_created_by (created_by)
         )
     `);
+    }
 
     /**
      * TABLE: folder_permissions
      */
-    await pool.execute(`
-        -- ============================================
-        -- TABLE: folder_permissions
-        -- Description: Permissions d'accès aux dossiers
-        -- ============================================
-        CREATE TABLE folder_permissions (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            folder_id INT NOT NULL,
-            user_id INT NOT NULL,
-            role ENUM('viewer', 'editor', 'admin') NOT NULL COMMENT 'Niveau de permission',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    if (!tableExists('folder_permissions')) {
+        await pool.execute(`
+            -- ============================================
+            -- TABLE: folder_permissions
+            -- Description: Permissions d'accès aux dossiers
+            -- ============================================
+            CREATE TABLE folder_permissions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                folder_id INT NOT NULL,
+                user_id INT NOT NULL,
+                role ENUM('viewer', 'editor', 'admin') NOT NULL COMMENT 'Niveau de permission',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-            FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE CASCADE,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            INDEX idx_folder (folder_id),
-            INDEX idx_user (user_id),
-            UNIQUE KEY unique_folder_user (folder_id, user_id)
-        );
-    `);
-
+                FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_folder (folder_id),
+                INDEX idx_user (user_id),
+                UNIQUE KEY unique_folder_user (folder_id, user_id)
+            );
+        `);
+    }
     /**
      * Partie documents
      */
-    await pool.execute(`
+    if (!tableExists('documents')) {
+         await pool.execute(`
         -- ============================================
         -- TABLE: documents
         -- Description: Documents de l'association
@@ -173,11 +208,13 @@ export async function initSchema() {
             INDEX idx_date (uploaded_at)
         );
     `);
-
+    }
+   
     /**
      * Partie document_permissions
      */
-    await pool.execute(`
+    if (!tableExists('document_permissions')) {
+      await pool.execute(`
         -- ============================================
         -- TABLE: document_permissions
         -- Description: Permissions spécifiques pour les documents de cours
@@ -198,12 +235,14 @@ export async function initSchema() {
             INDEX idx_user (user_id),
             UNIQUE KEY unique_document_user (document_id, user_id)
         );
-    `);
-
+      `);
+    }
+    
     /**
      * Partie organization_info
      */
-    await pool.execute(`
+    if (!tableExists('ornganization_info')) {
+      await pool.execute(`
         -- ============================================
         -- TABLE: organization_info
         -- Description: Informations de l'association
@@ -220,7 +259,86 @@ export async function initSchema() {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         );
     `);
+    }
     
+    // Table des permissions
+    if (!tableExists('permissions')) {
+      await pool.execute(`
+        CREATE TABLE IF NOT EXISTS permissions (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          resource VARCHAR(50) NOT NULL,
+          action VARCHAR(50) NOT NULL,
+          conditions JSON NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY unique_permission (resource, action)
+        )
+      `);
+    }
 
-    console.log('Schéma initialisé');
+  // Table des permissions utilisateur (personnalisées)
+  if (!tableExists('user_permissions')) {
+    await pool.execute(`
+      CREATE TABLE IF NOT EXISTS user_permissions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        permission_id INT NOT NULL,
+        is_granted BOOLEAN DEFAULT true,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_user_permission (user_id, permission_id)
+      )
+    `);
+  }
+
+    
+    // Table des refresh tokens
+    if (!tableExists('refresh_tokens')) {
+      await pool.execute(`
+          CREATE TABLE IF NOT EXISTS refresh_tokens (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          user_id INT NOT NULL,
+          token_hash VARCHAR(255) NOT NULL,
+          expires_at DATETIME NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          INDEX idx_user (user_id),
+          INDEX idx_expires (expires_at)
+          )
+      `);
+    }
+
+    await applyColumnMigrations();
+    console.log('Schéma vérifié et prêt');
+}
+
+async function applyColumnMigrations() {
+  // Exemple : ajouter une colonne si elle n'existe pas
+  if (await tableExists('users') && !await columnExists('users', 'two_factor_enabled')) {
+    console.log('Ajout de la colonne two_factor_enabled...');
+    await pool.execute(`
+      ALTER TABLE users ADD COLUMN two_factor_enabled BOOLEAN DEFAULT false
+    `);
+  }
+
+  if (await tableExists('users') && !await columnExists('users', 'two_factor_secret')) {
+    console.log('Ajout de la colonne two_factor_secret...');
+    await pool.execute(`
+      ALTER TABLE users ADD COLUMN two_factor_secret VARCHAR(255) NULL
+    `);
+  }
+}
+
+async function seedPermissions() {
+  const resources = ['cadet', 'document', 'user', 'role', 'course', 'absence'];
+  const actions = ['create', 'read', 'update', 'delete', 'read_own', 'update_own', 'delete_own', 'manage'];
+
+  for (const resource of resources) {
+    for (const action of actions) {
+      await pool.execute(`
+        INSERT IGNORE INTO permissions (resource, action)
+        VALUES (?, ?)
+      `, [resource, action]);
+    }
+  }
 }

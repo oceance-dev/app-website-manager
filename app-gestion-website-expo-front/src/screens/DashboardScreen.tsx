@@ -26,19 +26,19 @@ export default function DashboardScreen({ navigation }: Props) {
       color: '#3b82f6', 
       screen: 'Documents' as keyof RootStackParamList 
     },
-    { 
-      label: 'Utilisateurs', 
-      value: initialUtilisateurs.length.toString(), 
-      icon: Users, 
-      color: '#10b981', 
-      screen: 'Users' as keyof RootStackParamList 
+    {
+      label: 'Utilisateurs',
+      value: initialUtilisateurs.length.toString(),
+      icon: Users,
+      color: '#10b981',
+      screen: 'Dashboard' as keyof RootStackParamList
     },
-    { 
-      label: 'Actifs', 
-      value: initialUtilisateurs.filter(u => u.statut === 'Actif').length.toString(), 
-      icon: BarChart3, 
-      color: '#8b5cf6', 
-      screen: 'Statistics' as keyof RootStackParamList 
+    {
+      label: 'Actifs',
+      value: initialUtilisateurs.filter(u => u.statut === 'Actif').length.toString(),
+      icon: BarChart3,
+      color: '#8b5cf6',
+      screen: 'Dashboard' as keyof RootStackParamList
     },
     { 
       label: 'Stockage', 
@@ -50,10 +50,11 @@ export default function DashboardScreen({ navigation }: Props) {
   ];
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.welcome}>Bienvenue sur MonApp</Text>
-        <Text style={styles.subtitle}>Votre espace de gestion</Text>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      <View style={styles.card}>
+        <View style={styles.content}>
+          <Text style={styles.welcome}>Bienvenue sur MonApp</Text>
+          <Text style={styles.subtitle}>Votre espace de gestion</Text>
 
         <View style={styles.statsGrid}>
           {stats.map((stat, index) => (
@@ -84,10 +85,10 @@ export default function DashboardScreen({ navigation }: Props) {
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => navigation.navigate('Users')}
+            onPress={() => navigation.navigate('Settings')}
           >
             <Users color="#2563eb" size={20} />
-            <Text style={styles.actionText}>Gérer les utilisateurs</Text>
+            <Text style={styles.actionText}>Gérer les paramètres</Text>
           </TouchableOpacity>
         </View>
 
@@ -113,6 +114,7 @@ export default function DashboardScreen({ navigation }: Props) {
           </View>
         </View>
       </View>
+      </View>
     </ScrollView>
   );
 }
@@ -121,6 +123,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+  },
+  scrollContent: {
+    padding: 16,
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    overflow: 'hidden',
   },
   content: {
     padding: 20,

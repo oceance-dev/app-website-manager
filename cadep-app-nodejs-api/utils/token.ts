@@ -40,4 +40,4 @@ export const Token = {
     generateCsrf(): string {
         return crypto.randomBytes(32).toString('hex');
     }
-}
+};

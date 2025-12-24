@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { Token, TokenPayload } from "../utils/token";
-import { ApiError } from "../utils/ApiError";
+import { Token, TokenPayload } from "../utils/token.js";
+import { ApiError } from "../utils/ApiError.js";
 
 
 export interface AuthRequest extends Request {
@@ -24,6 +24,8 @@ export async function auth(req: AuthRequest, res: Response, next: NextFunction) 
 
         const token = authHeader.split(' ')[1];
         const payload = Token.verifyAccess(token);
+
+        const user = await U
     }
 
     const token = req.headers.authorization?.split(' ')[1];

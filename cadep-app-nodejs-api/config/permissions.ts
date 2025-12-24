@@ -1,5 +1,6 @@
 export const RESOURCES = {
     CADET: 'cadet',
+    CANDIDAT: 'candidat',
     DOCUMENT: 'document',
     USER: 'user',
     ROLE: 'role',
@@ -31,7 +32,7 @@ export interface Permission {
 
 export const DEFAULT_ROLES: Record<string, Permission[]> = {
     admin: [
-        { resource: RESOURCES.CADET, actions: ['create', 'read', 'update', 'delete', 'manage'] },
+        { resource: RESOURCES.CANDIDAT, actions: ['create', 'read', 'update', 'delete', 'manage'] },
         { resource: RESOURCES.DOCUMENT, actions: ['create', 'read', 'update', 'delete', 'manage'] },
         { resource: RESOURCES.USER, actions: ['create', 'read', 'update', 'delete', 'manage'] },
         { resource: RESOURCES.ROLE, actions: ['create', 'read', 'update', 'delete', 'manage'] },

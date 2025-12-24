@@ -31,10 +31,11 @@ export default function SettingsScreen() {
   ];
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Paramètres</Text>
-        <Text style={styles.subtitle}>Configurez votre application</Text>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      <View style={styles.card}>
+        <View style={styles.content}>
+          <Text style={styles.title}>Paramètres</Text>
+          <Text style={styles.subtitle}>Configurez votre application</Text>
 
         {/* Notifications Toggle */}
         <View style={styles.section}>
@@ -110,6 +111,7 @@ export default function SettingsScreen() {
           <Text style={styles.appInfoText}>Version 1.0.0</Text>
           <Text style={styles.appInfoText}>© 2025 MonApp</Text>
         </View>
+        </View>
       </View>
     </ScrollView>
   );
@@ -119,6 +121,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+  },
+  scrollContent: {
+    padding: 16,
+  },
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    overflow: 'hidden',
   },
   content: {
     padding: 20,

@@ -1,12 +1,17 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Animated, TouchableOpacity, Platform, Easing } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import DashboardScreen from '../screens/DashboardScreen';
+import SuperAdminDashboardScreen from '../screens/SuperAdminDashboardScreen';
 import DocumentsScreen from '../screens/DocumentsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import OrganizationScreen from '../screens/OrganizationScreen';
+import CoursesScreen from '../screens/CoursesScreen';
+import CandidatDocumentsScreen from '../screens/CandidatDocumentsScreen';
 import Sidebar from '../components/layout/Sidebar';
-import { RootStackParamList } from '../types';
+import Header from '../components/layout/Header';
+import { RootStackParamList, User } from '../types';
 import { menuItems } from '../data/mockData';
 import { isWeb, isLargeScreen } from '../utils/responsive';
 
@@ -14,14 +19,82 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 interface AppNavigatorProps {
   onLogout: () => void;
+  currentUser: User | null;
 }
 
-export default function AppNavigator({ onLogout }: AppNavigatorProps) {
+export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProps) {
   const [currentRoute, setCurrentRoute] = React.useState('Dashboard');
-  const showSidebar = isWeb && isLargeScreen();
+  const isDesktop = isWeb && isLargeScreen();
+  const [isSidebarOpen, setIsSidebarOpen] = React.useState(isDesktop);
+  const navigationRef = React.useRef<any>(null);
+  const sidebarWidth = React.useRef(new Animated.Value(isDesktop ? 280 : 0)).current;
+  const overlayOpacity = React.useRef(new Animated.Value(0)).current;
+
+  // Filtrer les menuItems selon le rôle de l'utilisateur
+  const filteredMenuItems = React.useMemo(() => {
+    if (!currentUser) return menuItems;
+
+    return menuItems.filter(item => {
+      // Si l'item n'a pas de restriction de rôles, il est visible pour tous
+      if (!item.roles || item.roles.length === 0) {
+        return true;
+      }
+
+      // Sinon, vérifier si le rôle de l'utilisateur est dans la liste
+      return item.roles.includes(currentUser.role);
+    });
+  }, [currentUser]);
+
+  // Déterminer l'écran initial selon le rôle
+  const initialRouteName = React.useMemo(() => {
+    if (currentUser?.role === 'Candidat') {
+      return 'CandidatDocuments';
+    }
+    return 'Dashboard';
+  }, [currentUser]);
+
+  React.useEffect(() => {
+    Animated.parallel([
+      Animated.timing(sidebarWidth, {
+        toValue: isSidebarOpen ? 280 : 0,
+        duration: 500,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+        useNativeDriver: false,
+      }),
+      Animated.timing(overlayOpacity, {
+        toValue: isSidebarOpen && !isDesktop ? 0.5 : 0,
+        duration: 500,
+        easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+        useNativeDriver: false,
+      })
+    ]).start();
+  }, [isSidebarOpen, isDesktop]);
+
+  const handleSettings = () => {
+    if (navigationRef.current) {
+      navigationRef.current.navigate('Settings');
+    }
+  };
+
+  const handleProfile = () => {
+    // TODO: Navigate to profile screen when it exists
+    console.log('Navigate to profile');
+  };
+
+  const handleToggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const handleSidebarNavigate = () => {
+    // Fermer la sidebar sur mobile après navigation
+    if (!isDesktop) {
+      setIsSidebarOpen(false);
+    }
+  };
 
   return (
     <NavigationContainer
+      ref={navigationRef}
       onStateChange={(state) => {
         if (state) {
           const route = state.routes[state.index];
@@ -30,44 +103,109 @@ export default function AppNavigator({ onLogout }: AppNavigatorProps) {
       }}
     >
       <View style={styles.container}>
-        {showSidebar && (
-          <Sidebar 
-            activeScreen={currentRoute}
-            onLogout={onLogout}
-            menuItems={menuItems}
-          />
+        {/* Sidebar - Desktop: fixed, Mobile: overlay - Hidden for Candidat */}
+        {isDesktop && currentUser?.role !== 'Candidat' && (
+          <Animated.View style={{ width: sidebarWidth, overflow: 'hidden' }}>
+            <Sidebar
+              activeScreen={currentRoute}
+              menuItems={filteredMenuItems}
+              onNavigate={handleSidebarNavigate}
+            />
+          </Animated.View>
         )}
+
         <View style={styles.content}>
+          <Header
+            activeScreen={currentRoute}
+            menuItems={filteredMenuItems}
+            onLogout={onLogout}
+            onSettings={handleSettings}
+            onProfile={handleProfile}
+            onToggleSidebar={handleToggleSidebar}
+          />
           <Stack.Navigator
-            initialRouteName="Dashboard"
+            initialRouteName={initialRouteName as any}
             screenOptions={{
-              headerStyle: {
-                backgroundColor: '#2563eb',
-              },
-              headerTintColor: '#fff',
-              headerTitleStyle: {
-                fontWeight: 'bold',
-              },
-              headerShown: !showSidebar,
+              headerShown: false,
             }}
           >
-            <Stack.Screen 
-              name="Dashboard" 
-              component={DashboardScreen}
+            <Stack.Screen
+              name="Dashboard"
+              component={currentUser?.role === 'SuperAdmin' ? SuperAdminDashboardScreen : DashboardScreen}
               options={{ title: 'Tableau de bord' }}
             />
-            <Stack.Screen 
-              name="Documents" 
+            <Stack.Screen
+              name="Documents"
               component={DocumentsScreen}
               options={{ title: 'Documents' }}
             />
-            <Stack.Screen 
-              name="Settings" 
+            <Stack.Screen
+              name="Organization"
+              component={OrganizationScreen}
+              options={{ title: 'Gestion de l\'association' }}
+            />
+            <Stack.Screen
+              name="Courses"
+              options={{ title: 'Cours' }}
+            >
+              {(props) => <CoursesScreen {...props} route={{ ...props.route, params: { ...props.route.params, currentUser } }} />}
+            </Stack.Screen>
+            <Stack.Screen
+              name="CandidatDocuments"
+              component={CandidatDocumentsScreen}
+              options={{ title: 'Mes documents' }}
+            />
+            <Stack.Screen
+              name="Settings"
               component={SettingsScreen}
               options={{ title: 'Paramètres' }}
             />
           </Stack.Navigator>
         </View>
+
+        {/* Mobile Sidebar Overlay - Hidden for Candidat */}
+        {!isDesktop && currentUser?.role !== 'Candidat' && (
+          <>
+            {/* Backdrop */}
+            <Animated.View
+              style={[
+                styles.overlay,
+                { opacity: overlayOpacity }
+              ]}
+              pointerEvents={isSidebarOpen ? 'auto' : 'none'}
+            >
+              <TouchableOpacity
+                style={StyleSheet.absoluteFill}
+                onPress={() => setIsSidebarOpen(false)}
+                activeOpacity={1}
+              />
+            </Animated.View>
+
+            {/* Sidebar */}
+            <Animated.View
+              style={[
+                styles.mobileSidebar,
+                {
+                  width: sidebarWidth,
+                  transform: [
+                    {
+                      translateX: sidebarWidth.interpolate({
+                        inputRange: [0, 280],
+                        outputRange: [-280, 0],
+                      })
+                    }
+                  ]
+                }
+              ]}
+            >
+              <Sidebar
+                activeScreen={currentRoute}
+                menuItems={filteredMenuItems}
+                onNavigate={handleSidebarNavigate}
+              />
+            </Animated.View>
+          </>
+        )}
       </View>
     </NavigationContainer>
   );
@@ -77,8 +215,28 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     flexDirection: 'row',
+    backgroundColor: '#f8fafc',
   },
   content: {
     flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    zIndex: 999,
+  },
+  mobileSidebar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    zIndex: 1000,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 16,
   },
 });

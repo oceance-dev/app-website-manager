@@ -1,0 +1,14 @@
+{
+    "files.autoSave": "afterDelay",
+    "vscode_vibrancy.type": "acrylic",
+    "vscode_vibrancy.opacity": 0.85,
+    "vscode_vibrancy.theme": "Dark (Only Subbar)",
+    "vscode_vibrancy.imports": [
+        "import 'vibrancy/styles/dark.css';"
+    ],
+    "workbench.colorCustomizations": {
+        "terminal.background": "#00000000"
+    },
+    "terminal.integrated.gpuAcceleration": "off",
+    "window.autoDetectColorScheme": true
+}
