@@ -1,4 +1,4 @@
-import { API_CONFIG, ApiResponse, handleApiResponse, getAuthHeaders } from './config';
+import { API_CONFIG, ApiResponse, handleApiResponse, getAuthHeaders, fetchWithTimeout } from './config';
 
 // Types pour les associations
 export interface Association {
@@ -39,7 +39,7 @@ export const AssociationsApi = {
    * Récupérer toutes les associations (public - pour inscription)
    */
   async getAllPublic(): Promise<ApiResponse<GetAllAssociationsResponse>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/associations`, {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/associations`, {
       method: 'GET',
       headers: API_CONFIG.DEFAULT_HEADERS,
     });
@@ -51,7 +51,7 @@ export const AssociationsApi = {
    * Récupérer toutes les associations (Super Admin)
    */
   async getAll(accessToken: string): Promise<ApiResponse<GetAllAssociationsResponse>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/admin/associations`, {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations`, {
       method: 'GET',
       headers: getAuthHeaders(accessToken),
     });
@@ -63,7 +63,7 @@ export const AssociationsApi = {
    * R�cup�rer les associations en attente (Super Admin)
    */
   async getPending(accessToken: string): Promise<ApiResponse<GetPendingAssociationsResponse>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/admin/associations/pending`, {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/pending`, {
       method: 'GET',
       headers: getAuthHeaders(accessToken),
     });
@@ -75,7 +75,7 @@ export const AssociationsApi = {
    * R�cup�rer les d�tails d'une association (Super Admin)
    */
   async getById(id: number, accessToken: string): Promise<ApiResponse<{ association: AssociationWithStats }>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}`, {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}`, {
       method: 'GET',
       headers: getAuthHeaders(accessToken),
     });
@@ -91,7 +91,7 @@ export const AssociationsApi = {
     data: Partial<Association>,
     accessToken: string
   ): Promise<ApiResponse<{ association: Association }>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}`, {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(accessToken),
       body: JSON.stringify(data),
@@ -104,7 +104,7 @@ export const AssociationsApi = {
    * Approuver une association (Super Admin)
    */
   async approve(id: number, accessToken: string): Promise<ApiResponse<{ association: Association }>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/approve`, {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/approve`, {
       method: 'POST',
       headers: getAuthHeaders(accessToken),
     });
@@ -120,7 +120,7 @@ export const AssociationsApi = {
     reason: string,
     accessToken: string
   ): Promise<ApiResponse<{ association: Association }>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/reject`, {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/reject`, {
       method: 'POST',
       headers: getAuthHeaders(accessToken),
       body: JSON.stringify({ reason }),
@@ -137,7 +137,7 @@ export const AssociationsApi = {
     reason: string,
     accessToken: string
   ): Promise<ApiResponse<{ association: Association }>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/suspend`, {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/suspend`, {
       method: 'POST',
       headers: getAuthHeaders(accessToken),
       body: JSON.stringify({ reason }),
@@ -150,7 +150,7 @@ export const AssociationsApi = {
    * R�activer une association (Super Admin)
    */
   async reactivate(id: number, accessToken: string): Promise<ApiResponse<{ association: Association }>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/reactivate`, {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/reactivate`, {
       method: 'POST',
       headers: getAuthHeaders(accessToken),
     });
@@ -166,7 +166,7 @@ export const AssociationsApi = {
     months: number,
     accessToken: string
   ): Promise<ApiResponse<{ association: Association }>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/extend-subscription`, {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/extend-subscription`, {
       method: 'POST',
       headers: getAuthHeaders(accessToken),
       body: JSON.stringify({ months }),

@@ -1,4 +1,4 @@
-import { API_CONFIG, ApiResponse, handleApiResponse, getAuthHeaders } from './config';
+import { API_CONFIG, ApiResponse, handleApiResponse, getAuthHeaders, fetchWithTimeout } from './config';
 
 // Types pour les utilisateurs
 export interface UserResponse {
@@ -62,7 +62,7 @@ export const UsersApi = {
 
     const url = `${API_CONFIG.BASE_URL}/v1/users${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
 
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'GET',
       headers: getAuthHeaders(accessToken),
     });

@@ -3,8 +3,8 @@ export const API_CONFIG = {
   // URL de base de l'API - à modifier selon votre environnement
   BASE_URL: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api',
 
-  // Timeout des requêtes (en millisecondes)
-  TIMEOUT: 30000,
+  // Timeout des requêtes (en millisecondes) - réduit à 5 secondes
+  TIMEOUT: 5000,
 
   // Headers par défaut
   DEFAULT_HEADERS: {
@@ -53,6 +53,31 @@ export const getAuthHeaders = (token?: string): HeadersInit => {
   }
 
   return headers;
+};
+
+// Fonction utilitaire pour créer une requête avec timeout
+export const fetchWithTimeout = async (
+  url: string,
+  options: RequestInit = {},
+  timeout: number = API_CONFIG.TIMEOUT
+): Promise<Response> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new ApiError('La requête a expiré. Vérifiez votre connexion.', 408);
+    }
+    throw error;
+  }
 };
 
 // Fonction utilitaire pour gérer les réponses de l'API

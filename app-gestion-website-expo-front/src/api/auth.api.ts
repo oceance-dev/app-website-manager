@@ -1,4 +1,4 @@
-import { API_CONFIG, ApiError, ApiResponse, handleApiResponse } from './config';
+import { API_CONFIG, ApiError, ApiResponse, handleApiResponse, fetchWithTimeout } from './config';
 
 // Types pour l'authentification
 export interface RegisterAssociationData {
@@ -105,7 +105,7 @@ export const AuthApi = {
    * Inscription d'une nouvelle association
    */
   async registerAssociation(data: RegisterAssociationData): Promise<ApiResponse<RegisterAssociationResponse>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/auth/registerAssociation`, {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/auth/registerAssociation`, {
       method: 'POST',
       headers: API_CONFIG.DEFAULT_HEADERS,
       body: JSON.stringify(data),
@@ -122,7 +122,7 @@ export const AuthApi = {
     console.log('🌐 API Call URL:', url);
     console.log('📦 Request body:', JSON.stringify(data, null, 2));
 
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'POST',
       headers: API_CONFIG.DEFAULT_HEADERS,
       body: JSON.stringify(data),
@@ -138,7 +138,7 @@ export const AuthApi = {
    * Connexion
    */
   async login(data: LoginData): Promise<ApiResponse<LoginResponse>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/auth/login`, {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/auth/login`, {
       method: 'POST',
       headers: API_CONFIG.DEFAULT_HEADERS,
       body: JSON.stringify(data),
@@ -151,7 +151,7 @@ export const AuthApi = {
    * Rafraîchir les tokens
    */
   async refreshToken(refreshToken: string): Promise<ApiResponse<LoginResponse>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/auth/refresh`, {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/auth/refresh`, {
       method: 'POST',
       headers: API_CONFIG.DEFAULT_HEADERS,
       body: JSON.stringify({ refreshToken }),
