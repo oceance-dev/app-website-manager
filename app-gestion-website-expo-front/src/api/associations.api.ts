@@ -1,4 +1,6 @@
 import { API_CONFIG, ApiResponse, handleApiResponse, getAuthHeaders, fetchWithTimeout } from './config';
+import { api } from './apiRequest';
+import { UrlApi } from './url.api';
 
 // Types pour les associations
 export interface Association {
@@ -18,6 +20,22 @@ export interface Association {
   updatedAt: string;
 }
 
+export interface Member {
+  id: number;
+  firstname: string;
+  lastname: string;
+  email: string;
+  phone: string;
+  city_code: string;
+  dateOfBirth: string;
+  sexe: string;
+}
+
+export interface GetMembersResponse {
+  members: Member[];
+  total: number;
+}
+
 export interface AssociationWithStats extends Association {
   usersCount?: number;
   activeUsersCount?: number;
@@ -34,144 +52,178 @@ export interface GetPendingAssociationsResponse {
   total: number;
 }
 
+export interface AssociationStats {
+  activeUsers: number;
+  inactiveUsers: number;
+  documentsCount: number;
+  foldersCount: number;
+  usersByRole: any[];
+}
+
 export const AssociationsApi = {
   /**
    * Récupérer toutes les associations (public - pour inscription)
    */
   async getAllPublic(): Promise<ApiResponse<GetAllAssociationsResponse>> {
-    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/associations`, {
-      method: 'GET',
-      headers: API_CONFIG.DEFAULT_HEADERS,
-    });
+    const data = await api.get<GetAllAssociationsResponse>(UrlApi.associationsApi.baseAssociation.getAll, { skipAuth: true });
+    return { success: true, data };
+  },
 
-    return handleApiResponse<GetAllAssociationsResponse>(response);
+  /**
+   * Récupérer les rôles occupés dans une association (public - pour inscription)
+   */
+  async getOccupiedRoles(associationId: number): Promise<ApiResponse<{ roles: string[] }>> {
+    const data = await api.get<{ roles: string[] }>(UrlApi.associationsApi.baseAssociation.occupiedRole(associationId), { skipAuth: true });
+    return { success: true, data };
   },
 
   /**
    * Récupérer toutes les associations (Super Admin)
    */
-  async getAll(accessToken: string): Promise<ApiResponse<GetAllAssociationsResponse>> {
-    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations`, {
-      method: 'GET',
-      headers: getAuthHeaders(accessToken),
-    });
-
-    return handleApiResponse<GetAllAssociationsResponse>(response);
+  async getAll(): Promise<ApiResponse<GetAllAssociationsResponse>> {
+   
+    const data = await api.get<GetAllAssociationsResponse>(UrlApi.associationsApi.staffApp.association.getAll);
+    return { success: true, data };
   },
 
+
   /**
-   * R�cup�rer les associations en attente (Super Admin)
+   * Récupérer tous les membres d'une association (admin)
    */
-  async getPending(accessToken: string): Promise<ApiResponse<GetPendingAssociationsResponse>> {
-    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/pending`, {
-      method: 'GET',
-      headers: getAuthHeaders(accessToken),
-    });
+  async getMembers(
+    filters?: { isActive?: boolean; search?: string; page?: number; limit?: number }
+  ): Promise<ApiResponse<GetMembersResponse>> {
+    // Construire les query params
+    const queryParams = new URLSearchParams();
+    if (filters?.isActive !== undefined) queryParams.append('isActive', String(filters.isActive));
+    if (filters?.search) queryParams.append('search', filters.search);
+    if (filters?.page) queryParams.append('page', String(filters.page));
+    if (filters?.limit) queryParams.append('limit', String(filters.limit));
 
-    return handleApiResponse<GetPendingAssociationsResponse>(response);
+    const url = `${UrlApi.associationsApi.admin.members.getAll}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const members = await api.get<GetMembersResponse>(url);
+
+    return {
+      success: true,
+      data: members,
+    };
   },
 
   /**
-   * R�cup�rer les d�tails d'une association (Super Admin)
+   * Permet de récupérer les membres en attente de validation
+   * @param filters 
+   * @returns 
    */
-  async getById(id: number, accessToken: string): Promise<ApiResponse<{ association: AssociationWithStats }>> {
-    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}`, {
-      method: 'GET',
-      headers: getAuthHeaders(accessToken),
-    });
+  async getMembersPending(
+    filters?: { isActive?: boolean; search?: string; page?: number; limit?: number }
+  ): Promise<ApiResponse<GetMembersResponse>> {
 
-    return handleApiResponse<{ association: AssociationWithStats }>(response);
+    const queryParams = new URLSearchParams();
+    if (filters?.isActive !== undefined) queryParams.append('isActive', String(filters.isActive));
+    if (filters?.search) queryParams.append('search', filters.search);
+    if (filters?.page) queryParams.append('page', String(filters.page));
+    if (filters?.limit) queryParams.append('limit', String(filters.limit));
+
+    const url = `${UrlApi.associationsApi.admin.members.getAll}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const data = await api.get<GetMembersResponse>(url);
+    return { success: true, data };
+  },
+  
+  /**
+   * Permet d'approuver un membre d'une association
+   * @param id
+   * @param roleId
+   * @returns
+   */
+  async approveMember(id: number, roleId: number): Promise<ApiResponse<{ member: Member }>> {
+    const data = await api.post<{ member: Member }>(UrlApi.associationsApi.admin.members.approveMember(id), { roleId });
+    return { success: true, data };
   },
 
   /**
-   * Mettre � jour une association (Super Admin)
+   * Permet de rejeteer un membre d'une association
+   * @param id 
+   * @param reason 
+   * @returns 
+   */
+  async rejectMember(id: number, reason: string): Promise<ApiResponse<{ member: Member }>> {
+    const data = await api.post<{ member: Member }>(UrlApi.associationsApi.admin.members.rejectMember(id), { reason });
+    return { success: true, data };
+  },
+
+  /**
+   * Récupérer les associations en attente (Super Admin)
+   */
+  async getPending(): Promise<ApiResponse<GetPendingAssociationsResponse>> {
+    const data = await api.get<GetPendingAssociationsResponse>(UrlApi.associationsApi.staffApp.association.getAll);
+    return { success: true, data };
+  },
+
+  /**
+   * Récupérer les détails d'une association (Super Admin)
+   */
+  async getById(id: number): Promise<ApiResponse<{ association: AssociationWithStats }>> {
+    const data = await api.get<{ association: AssociationWithStats }>(UrlApi.associationsApi.admin.association.get(id));
+    return { success: true, data };
+  },
+
+  /**
+   * Mettre à jour une association (Admin)
    */
   async update(
     id: number,
-    data: Partial<Association>,
-    accessToken: string
+    data: Partial<Association>
   ): Promise<ApiResponse<{ association: Association }>> {
-    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}`, {
-      method: 'PUT',
-      headers: getAuthHeaders(accessToken),
-      body: JSON.stringify(data),
-    });
-
-    return handleApiResponse<{ association: Association }>(response);
+    const result = await api.put<{ association: Association }>(UrlApi.associationsApi.admin.association.update(id), data);
+    return { success: true, data: result };
   },
 
   /**
    * Approuver une association (Super Admin)
    */
-  async approve(id: number, accessToken: string): Promise<ApiResponse<{ association: Association }>> {
-    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/approve`, {
-      method: 'POST',
-      headers: getAuthHeaders(accessToken),
-    });
-
-    return handleApiResponse<{ association: Association }>(response);
+  async approve(id: number): Promise<ApiResponse<{ association: Association }>> {
+    const data = await api.post<{ association: Association }>(UrlApi.associationsApi.staffApp.association.approve(id));
+    return { success: true, data };
   },
 
   /**
    * Rejeter une association (Super Admin)
    */
-  async reject(
-    id: number,
-    reason: string,
-    accessToken: string
-  ): Promise<ApiResponse<{ association: Association }>> {
-    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/reject`, {
-      method: 'POST',
-      headers: getAuthHeaders(accessToken),
-      body: JSON.stringify({ reason }),
-    });
-
-    return handleApiResponse<{ association: Association }>(response);
+  async reject(id: number, reason: string): Promise<ApiResponse<{ association: Association }>> {
+    const data = await api.post<{ association: Association }>(UrlApi.associationsApi.staffApp.association.reject(id), { reason });
+    return { success: true, data };
   },
 
   /**
    * Suspendre une association (Super Admin)
    */
-  async suspend(
-    id: number,
-    reason: string,
-    accessToken: string
-  ): Promise<ApiResponse<{ association: Association }>> {
-    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/suspend`, {
-      method: 'POST',
-      headers: getAuthHeaders(accessToken),
-      body: JSON.stringify({ reason }),
-    });
-
-    return handleApiResponse<{ association: Association }>(response);
+  async suspend(id: number, reason: string): Promise<ApiResponse<{ association: Association }>> {
+    const data = await api.post<{ association: Association }>(UrlApi.associationsApi.staffApp.association.suspend(id), { reason });
+    return { success: true, data };
   },
 
   /**
-   * R�activer une association (Super Admin)
+   * Réactiver une association (Super Admin)
    */
-  async reactivate(id: number, accessToken: string): Promise<ApiResponse<{ association: Association }>> {
-    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/reactivate`, {
-      method: 'POST',
-      headers: getAuthHeaders(accessToken),
-    });
-
-    return handleApiResponse<{ association: Association }>(response);
+  async reactivate(id: number): Promise<ApiResponse<{ association: Association }>> {
+    const data = await api.post<{ association: Association }>(UrlApi.associationsApi.staffApp.association.reactived(id));
+    return { success: true, data };
   },
 
   /**
    * Prolonger l'abonnement d'une association (Super Admin)
    */
-  async extendSubscription(
-    id: number,
-    months: number,
-    accessToken: string
-  ): Promise<ApiResponse<{ association: Association }>> {
-    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/admin/associations/${id}/extend-subscription`, {
-      method: 'POST',
-      headers: getAuthHeaders(accessToken),
-      body: JSON.stringify({ months }),
-    });
+  async extendSubscription(id: number, months: number): Promise<ApiResponse<{ association: Association }>> {
+    const data = await api.post<{ association: Association }>(UrlApi.associationsApi.admin.association.extendSubscription(id), { months });
+    return { success: true, data };
+  },
 
-    return handleApiResponse<{ association: Association }>(response);
+  /**
+   * Récupérer les statistiques de mon association
+   */
+  async getMyStats(): Promise<ApiResponse<{ stats: AssociationStats }>> {
+    const data = await api.get<{ stats: AssociationStats }>(UrlApi.associationsApi.admin.association.getStats);
+    return { success: true, data };
   },
 };
+

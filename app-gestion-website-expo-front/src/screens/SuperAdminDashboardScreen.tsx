@@ -67,35 +67,25 @@ export default function SuperAdminDashboardScreen() {
 
   const loadAssociations = async () => {
     try {
-      const accessToken = await AsyncStorage.getItem('accessToken');
-      if (!accessToken) {
-        console.error('No access token found');
-        return;
-      }
-
-      const response = await AssociationsApi.getAll(accessToken);
+      const response = await AssociationsApi.getAll();
 
       if (response.success && response.data) {
         setAssociations(response.data.associations);
 
-        // Calculer les statistiques
+        // Calculer les statistiques des associations
         const totalAssociations = response.data.total;
         const activeAssociations = response.data.associations.filter(a => a.status === 'active').length;
         const pendingAssociations = response.data.associations.filter(a => a.status === 'pending').length;
         const rejectedAssociations = response.data.associations.filter(a => a.status === 'rejected').length;
         const suspendedAssociations = response.data.associations.filter(a => a.status === 'suspended').length;
 
-        const totalUsers = response.data.associations.reduce((sum, a) => sum + (a.usersCount || 0), 0);
-        const activeUsers = response.data.associations.reduce((sum, a) => sum + (a.activeUsersCount || 0), 0);
-
-        setStats({
+        setStats(prevStats => ({
+          ...prevStats,
           totalAssociations,
           activeAssociations,
           pendingAssociations,
           rejectedAssociations: rejectedAssociations + suspendedAssociations,
-          totalUsers,
-          activeUsers,
-        });
+        }));
       }
     } catch (error) {
       console.error('Error loading associations:', error);
@@ -112,13 +102,7 @@ export default function SuperAdminDashboardScreen() {
 
   const loadUsers = async () => {
     try {
-      const accessToken = await AsyncStorage.getItem('accessToken');
-      if (!accessToken) {
-        console.error('No access token found');
-        return;
-      }
-
-      const response = await UsersApi.getAll(accessToken, { limit: 100 });
+      const response = await UsersApi.getAll();
 
       if (response.success && response.data) {
         // Mapper les utilisateurs avec les noms d'association
@@ -129,13 +113,23 @@ export default function SuperAdminDashboardScreen() {
             firstname: user.firstName,
             lastname: user.lastName,
             email: user.email,
-            role: user.role,
+            role: user.role?.displayName || user.role?.name || 'N/A',
             associationName: association?.name || 'N/A',
             isActive: user.isActive,
           };
         });
 
         setUsers(usersWithAssociation);
+
+        // Mettre à jour les statistiques des utilisateurs
+        const totalUsers = response.data.total || response.data.users.length;
+        const activeUsers = response.data.users.filter(u => u.isActive).length;
+
+        setStats(prevStats => ({
+          ...prevStats,
+          totalUsers,
+          activeUsers,
+        }));
       }
     } catch (error) {
       console.error('Error loading users:', error);
@@ -155,10 +149,7 @@ export default function SuperAdminDashboardScreen() {
 
   const handleApprove = async (id: number) => {
     try {
-      const accessToken = await AsyncStorage.getItem('accessToken');
-      if (!accessToken) return;
-
-      await AssociationsApi.approve(id, accessToken);
+      await AssociationsApi.approve(id);
 
       if (isWeb) {
         alert('Association approuvée avec succès');
@@ -180,10 +171,7 @@ export default function SuperAdminDashboardScreen() {
 
   const handleReject = async (id: number) => {
     try {
-      const accessToken = await AsyncStorage.getItem('accessToken');
-      if (!accessToken) return;
-
-      await AssociationsApi.reject(id, 'Demande rejetée par l\'administrateur', accessToken);
+      await AssociationsApi.reject(id, 'Demande rejetée par l\'administrateur');
 
       if (isWeb) {
         alert('Association rejetée');
@@ -205,10 +193,7 @@ export default function SuperAdminDashboardScreen() {
 
   const handleSuspend = async (id: number) => {
     try {
-      const accessToken = await AsyncStorage.getItem('accessToken');
-      if (!accessToken) return;
-
-      await AssociationsApi.suspend(id, 'Association suspendue', accessToken);
+      await AssociationsApi.suspend(id, 'Association suspendue');
 
       if (isWeb) {
         alert('Association suspendue');
@@ -230,10 +215,7 @@ export default function SuperAdminDashboardScreen() {
 
   const handleReactivate = async (id: number) => {
     try {
-      const accessToken = await AsyncStorage.getItem('accessToken');
-      if (!accessToken) return;
-
-      await AssociationsApi.reactivate(id, accessToken);
+      await AssociationsApi.reactivate(id);
 
       if (isWeb) {
         alert('Association réactivée');
@@ -331,54 +313,85 @@ export default function SuperAdminDashboardScreen() {
       {/* Content */}
       {activeTab === 'overview' && (
         <View style={styles.content}>
-          {/* Stats Grid */}
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <View style={[styles.statIcon, { backgroundColor: '#dbeafe' }]}>
-                <Building2 size={24} color="#2563eb" />
-              </View>
-              <Text style={styles.statValue}>{stats.totalAssociations}</Text>
-              <Text style={styles.statLabel}>Associations totales</Text>
+          {/* Section Associations */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Building2 size={20} color="#2563eb" />
+              <Text style={styles.sectionTitle}>Associations</Text>
             </View>
-
-            <View style={styles.statCard}>
-              <View style={[styles.statIcon, { backgroundColor: '#dcfce7' }]}>
-                <CheckCircle size={24} color="#10b981" />
+            <View style={styles.statsGrid}>
+              <View style={styles.statCard}>
+                <View style={[styles.statIcon, { backgroundColor: '#dbeafe' }]}>
+                  <Building2 size={24} color="#2563eb" />
+                </View>
+                <Text style={styles.statValue}>{stats.totalAssociations}</Text>
+                <Text style={styles.statLabel}>Total</Text>
               </View>
-              <Text style={styles.statValue}>{stats.activeAssociations}</Text>
-              <Text style={styles.statLabel}>Actives</Text>
+
+              <View style={styles.statCard}>
+                <View style={[styles.statIcon, { backgroundColor: '#dcfce7' }]}>
+                  <CheckCircle size={24} color="#10b981" />
+                </View>
+                <Text style={styles.statValue}>{stats.activeAssociations}</Text>
+                <Text style={styles.statLabel}>Actives</Text>
+              </View>
+
+              <View style={styles.statCard}>
+                <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
+                  <Clock size={24} color="#f59e0b" />
+                </View>
+                <Text style={styles.statValue}>{stats.pendingAssociations}</Text>
+                <Text style={styles.statLabel}>En attente</Text>
+              </View>
+
+              <View style={styles.statCard}>
+                <View style={[styles.statIcon, { backgroundColor: '#fee2e2' }]}>
+                  <XCircle size={24} color="#ef4444" />
+                </View>
+                <Text style={styles.statValue}>{stats.rejectedAssociations}</Text>
+                <Text style={styles.statLabel}>Rejetées/Suspendues</Text>
+              </View>
             </View>
+          </View>
 
-            <View style={styles.statCard}>
-              <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
-                <Clock size={24} color="#f59e0b" />
-              </View>
-              <Text style={styles.statValue}>{stats.pendingAssociations}</Text>
-              <Text style={styles.statLabel}>En attente</Text>
+          {/* Section Utilisateurs */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Users size={20} color="#2563eb" />
+              <Text style={styles.sectionTitle}>Utilisateurs</Text>
             </View>
-
-            <View style={styles.statCard}>
-              <View style={[styles.statIcon, { backgroundColor: '#fee2e2' }]}>
-                <XCircle size={24} color="#ef4444" />
+            <View style={styles.statsGrid}>
+              <View style={styles.statCard}>
+                <View style={[styles.statIcon, { backgroundColor: '#dbeafe' }]}>
+                  <Users size={24} color="#2563eb" />
+                </View>
+                <Text style={styles.statValue}>{stats.totalUsers}</Text>
+                <Text style={styles.statLabel}>Total</Text>
               </View>
-              <Text style={styles.statValue}>{stats.rejectedAssociations}</Text>
-              <Text style={styles.statLabel}>Rejetées</Text>
-            </View>
 
-            <View style={styles.statCard}>
-              <View style={[styles.statIcon, { backgroundColor: '#dbeafe' }]}>
-                <Users size={24} color="#2563eb" />
+              <View style={styles.statCard}>
+                <View style={[styles.statIcon, { backgroundColor: '#dcfce7' }]}>
+                  <CheckCircle size={24} color="#10b981" />
+                </View>
+                <Text style={styles.statValue}>{stats.activeUsers}</Text>
+                <Text style={styles.statLabel}>Actifs</Text>
               </View>
-              <Text style={styles.statValue}>{stats.totalUsers}</Text>
-              <Text style={styles.statLabel}>Utilisateurs totaux</Text>
-            </View>
 
-            <View style={styles.statCard}>
-              <View style={[styles.statIcon, { backgroundColor: '#dcfce7' }]}>
-                <CheckCircle size={24} color="#10b981" />
+              <View style={styles.statCard}>
+                <View style={[styles.statIcon, { backgroundColor: '#e0e7ff' }]}>
+                  <Users size={24} color="#6366f1" />
+                </View>
+                <Text style={styles.statValue}>{stats.totalUsers - stats.activeUsers}</Text>
+                <Text style={styles.statLabel}>Inactifs</Text>
               </View>
-              <Text style={styles.statValue}>{stats.activeUsers}</Text>
-              <Text style={styles.statLabel}>Actifs</Text>
+
+              <View style={styles.statCard}>
+                <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
+                  <Clock size={24} color="#f59e0b" />
+                </View>
+                <Text style={styles.statValue}>{users.filter(u => !u.isActive).length}</Text>
+                <Text style={styles.statLabel}>En attente</Text>
+              </View>
             </View>
           </View>
 
@@ -590,11 +603,19 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 24,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: '#e2e8f0',
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#1e293b',
-    marginBottom: 12,
   },
   card: {
     backgroundColor: '#fff',

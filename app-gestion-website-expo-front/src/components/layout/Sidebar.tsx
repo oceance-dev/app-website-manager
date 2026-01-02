@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, StatusBar } from 'react-native';
-import { Home, FolderOpen, Users, BarChart3, Settings, Building2, BookOpen } from 'lucide-react-native';
+import { Home, FolderOpen, Users, BarChart3, Settings, Building2, BookOpen, UserCheck } from 'lucide-react-native';
 import { MenuItem } from '../../types';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -18,6 +18,7 @@ const iconMap = {
   'folder': FolderOpen,
   'book-open': BookOpen,
   'users': Users,
+  'user-check': UserCheck,
   'bar-chart-2': BarChart3,
   'building-2': Building2,
   'settings': Settings,

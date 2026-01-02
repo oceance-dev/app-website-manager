@@ -53,9 +53,9 @@ export default class AuthController {
      * Inscription d'un nouveau membre d'une association
      */
     async registerMemberAssociation({ request, response }: HttpContext) {
-        const payload = await request.validateUsing(registerAssociationMemberValidator)
-
         try {
+            const payload = await request.validateUsing(registerAssociationMemberValidator)
+
             const { user } = await this.authService.registerMemberAssociationService(
                 payload.associationMember,
                 {
@@ -72,9 +72,10 @@ export default class AuthController {
                 },
             })
         } catch (error) {
+            console.error('❌ Registration error:', error)
             return response.badRequest({
                 success: false,
-                message: error.message || 'Erreur lors de l\’inscription',
+                message: error.message || 'Erreur lors de l\'inscription',
                 errors: [{ message: error.message}],
             })
         }
@@ -89,23 +90,21 @@ export default class AuthController {
         const payload = await request.validateUsing(loginValidator)
 
         try {
-            const result = await this.authService.login(
-                payload.email,
-                payload.password,
-                {
-                    ipAddress: request.ip(),
-                    userAgent: request.header('user-agent'),
-                }
-            )
+            const result = await this.authService.login({
+                email: payload.email,
+                password: payload.password,
+                ip: request.ip(),
+                userAgent: request.header('user-agent') || '',
+            })
 
             return response.ok({
                 success: true,
                 message: 'Connexion réussie',
                 data: {
                     user: result.user.serialize(),
-                    association: result.association?.serialize() ?? null,
-                    accessToken: result.accessToken,
-                    refreshToken: result.refreshToken,
+                    association: result.user.association?.serialize() ?? null,
+                    accessToken: result.tokens.accessToken,
+                    refreshToken: result.tokens.refreshToken,
                 },
             })
         } catch (error) {
@@ -127,10 +126,8 @@ export default class AuthController {
         try {
             const result = await this.authService.refreshTokens(
                 payload.refreshToken,
-                {
-                    ipAddress: request.ip(),
-                    userAgent: request.header('user-agent'),
-                }
+                request.ip(),
+                request.header('user-agent') || ''
             )
 
             return response.ok({
@@ -138,9 +135,9 @@ export default class AuthController {
                 message: 'Tokens rafraîchis',
                 data: {
                     user: result.user.serialize(),
-                    association: result.association?.serialize() ?? null,
-                    accessToken: result.accessToken,
-                    refreshToken: result.refreshToken,
+                    association: result.user.association?.serialize() ?? null,
+                    accessToken: result.tokens.accessToken,
+                    refreshToken: result.tokens.refreshToken,
                 },
             })
         } catch (error) {
@@ -177,7 +174,7 @@ export default class AuthController {
         const user = auth.user!
         const refreshToken = request.input('refreshToken')
 
-        await this.authService.logout(user, refreshToken)
+        await this.authService.logout(refreshToken, user)
 
         return response.ok({
             success: true,

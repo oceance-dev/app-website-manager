@@ -1,19 +1,29 @@
+import { api } from './apiRequest';
 import { API_CONFIG, ApiResponse, handleApiResponse, getAuthHeaders, fetchWithTimeout } from './config';
 
 // Types pour les utilisateurs
+export interface UserRoleResponse {
+  id: number;
+  name: string;
+  displayName: string;
+  level: number;
+}
+
 export interface UserResponse {
   id: number;
   associationId: number | null;
   email: string;
   firstName: string;
   lastName: string;
-  dateOfBirth: string;
-  phone: string;
-  city_code: string;
-  sexe: 'Homme' | 'Femme';
-  role: string;
-  permissions: string[];
+  dateOfBirth?: string;
+  phone?: string;
+  city_code?: string;
+  sexe?: 'Homme' | 'Femme';
+  role: UserRoleResponse;
+  permissions?: string[];
   isActive: boolean;
+  isSuperAdmin?: boolean;
+  isAdmin?: boolean;
   emailVerifiedAt?: string;
   lastLoginAt?: string;
   createdAt: string;
@@ -40,33 +50,66 @@ export interface UsersFilterParams {
   sortOrder?: 'asc' | 'desc';
 }
 
+export interface GetPendingUsersResponse {
+  users: UserResponse[];
+  count: number;
+}
+
 export const UsersApi = {
   /**
    * Récupérer tous les utilisateurs
    * - Super Admin : voit tous les utilisateurs
    * - Admin : voit uniquement les utilisateurs de son association
    */
-  async getAll(
-    accessToken: string,
-    filters?: UsersFilterParams
-  ): Promise<ApiResponse<GetAllUsersResponse>> {
+  async getAll(filters?: UsersFilterParams): Promise<ApiResponse<GetAllUsersResponse>> {
     const queryParams = new URLSearchParams();
-
     if (filters?.page) queryParams.append('page', filters.page.toString());
     if (filters?.limit) queryParams.append('limit', filters.limit.toString());
     if (filters?.search) queryParams.append('search', filters.search);
-    if (filters?.role) queryParams.append('role', filters.role);
-    if (filters?.isActive !== undefined) queryParams.append('isActive', filters.isActive.toString());
-    if (filters?.sortBy) queryParams.append('sortBy', filters.sortBy);
-    if (filters?.sortOrder) queryParams.append('sortOrder', filters.sortOrder);
+   
+    const url = `${API_CONFIG.BASE_URL}/admin/users${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const data = await api.get<GetAllUsersResponse>(url);
+    return { success: true, data };
+  },
 
-    const url = `${API_CONFIG.BASE_URL}/v1/users${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
 
-    const response = await fetchWithTimeout(url, {
-      method: 'GET',
+  /**
+   * Approuver un utilisateur
+   */
+  async approve(userId: number, accessToken: string): Promise<ApiResponse<{ user: UserResponse }>> {
+    const url = `${API_CONFIG.BASE_URL}/users/${userId}/approve`;
+    console.log('🌐 UsersApi.approve - URL:', url);
+    console.log('🌐 UsersApi.approve - userId:', userId);
+    console.log('🌐 UsersApi.approve - token:', accessToken ? 'Present' : 'Missing');
+
+    try {
+      const response = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers: getAuthHeaders(accessToken),
+      });
+
+      console.log('📡 UsersApi.approve - Response status:', response.status);
+      console.log('📡 UsersApi.approve - Response ok:', response.ok);
+
+      const result = await handleApiResponse<{ user: UserResponse }>(response);
+      console.log('✅ UsersApi.approve - Result:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ UsersApi.approve - Error:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Rejeter un utilisateur
+   */
+  async reject(userId: number, reason: string, accessToken: string): Promise<ApiResponse<{ reason: string }>> {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/users/${userId}/reject`, {
+      method: 'POST',
       headers: getAuthHeaders(accessToken),
+      body: JSON.stringify({ reason }),
     });
 
-    return handleApiResponse<GetAllUsersResponse>(response);
+    return handleApiResponse<{ reason: string }>(response);
   },
 };

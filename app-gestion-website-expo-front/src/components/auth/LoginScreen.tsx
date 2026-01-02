@@ -15,7 +15,7 @@ import { isWeb } from '../../utils/responsive';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { AuthApi, ApiError, mapBackendRoleToFrontend } from '../../api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { tokenStorage } from '../../api/tokenStorage';
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
@@ -47,24 +47,25 @@ export default function LoginScreen({ onLogin, onNavigateToSign, onNavigateToOrg
       });
 
       if (response.success && response.data) {
-        console.log('✅ Login successful via API');
+        // Stocker les tokens avec tokenStorage
+        await tokenStorage.setTokens({
+          accessToken: response.data.accessToken,
+          refreshToken: response.data.refreshToken,
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1h
+        });
 
-        // Stocker les tokens
-        await AsyncStorage.setItem('accessToken', response.data.accessToken.value);
-        await AsyncStorage.setItem('refreshToken', response.data.refreshToken.value);
-
-        // Mapper les données utilisateur de l'API vers le format User
-        const mappedRole = mapBackendRoleToFrontend(response.data.user.role);
-
+        // Garder l'objet role tel quel (ne pas le mapper en string)
         const user: User = {
           id: response.data.user.id,
-          lastname: response.data.user.lastname,
-          firstname: response.data.user.firstname,
+          lastname: response.data.user.lastName || response.data.user.lastname || '',
+          firstname: response.data.user.firstName || response.data.user.firstname || '',
           email: response.data.user.email,
-          role: mappedRole,
+          role: response.data.user.role, // Garder l'objet role complet
           statut: response.data.user.isActive ? 'Actif' : 'Inactif',
-          phone: '',
-          courseAccess: ['SuperAdmin', 'Admin', 'Encadrant'].includes(mappedRole),
+          phone: response.data.user.phone || '',
+          isSuperAdmin: response.data.user.isSuperAdmin,
+          isAdmin: response.data.user.isAdmin,
+          courseAccess: response.data.user.role?.name === 'formateur' || response.data.user.role?.name === 'admin' || response.data.user.role?.name === 'super_admin',
         };
 
         onLogin(user);

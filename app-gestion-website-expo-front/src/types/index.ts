@@ -49,18 +49,27 @@ export interface SignData {
     postalCode?: string;
 }
 
+export interface UserRole {
+    id: number;
+    name: string;
+    displayName: string;
+    level: number;
+}
+
 export interface User {
     id: number;
     lastname: string;
     firstname: string;
     email: string;
-    role: 'SuperAdmin' | 'Admin'  | 'Président' | 'Secrétaire' | 'Trésorier' | 'Encadrant' | 'Cadet' | 'Ancien Cadet' | 'Candidat';
+    role: UserRole | string; // Support both old string format and new object format
     statut: 'Actif' | 'Inactif';
     dateOfbirth?: string;
     sexe?: number;
     phone: string;
     courseAccess?: boolean;
     postalCode?: string;
+    isSuperAdmin?: boolean;
+    isAdmin?: boolean;
 }
 
 export interface MenuItem {
@@ -78,7 +87,8 @@ export type RootStackParamList = {
     Cadet: undefined;
     Statistics: undefined;
     Settings: undefined;
-    Organization: undefined;
+    Organization: { associationId?: number };
     Courses: undefined;
     CandidatDocuments: undefined;
+    PendingMembers: undefined;
 }

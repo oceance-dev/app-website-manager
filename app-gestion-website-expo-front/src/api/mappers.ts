@@ -8,7 +8,7 @@ export const mapBackendRoleToFrontend = (backendRole: string): User['role'] => {
   const roleMapping: Record<string, User['role']> = {
     'super_admin': 'SuperAdmin',
     'admin': 'Admin',
-    'président': 'Président',
+    'president': 'President',
     'tresorier': 'Trésorier',
     'directeur_formation': 'Encadrant',
     'formateur': 'Encadrant',

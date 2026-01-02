@@ -14,19 +14,43 @@ export function canUserAccessFolder(
 ): boolean {
   if (!folder) return false;
 
-  const userPermission = folder.permissions.find((p) => p.userId === userId);
-  if (!userPermission) return false;
+  // Gérer les permissions du backend (format objet)
+  if (folder.permissions && typeof folder.permissions === 'object' && !Array.isArray(folder.permissions)) {
+    const backendPerms = folder.permissions as any;
 
-  switch (action) {
-    case 'view':
-      return ['viewer', 'editor', 'admin'].includes(userPermission.role);
-    case 'add':
-      return ['editor', 'admin'].includes(userPermission.role);
-    case 'delete':
-      return userPermission.role === 'admin';
-    default:
-      return false;
+    // Si l'utilisateur est le créateur du dossier, il a tous les droits
+    if (folder.createdBy === userId) return true;
+
+    switch (action) {
+      case 'view':
+        return backendPerms.canView === true;
+      case 'add':
+        return backendPerms.canUpload === true || backendPerms.canManage === true;
+      case 'delete':
+        return backendPerms.canManage === true;
+      default:
+        return false;
+    }
   }
+
+  // Gérer l'ancien format (tableau de permissions)
+  if (Array.isArray(folder.permissions)) {
+    const userPermission = folder.permissions.find((p) => p.userId === userId);
+    if (!userPermission) return false;
+
+    switch (action) {
+      case 'view':
+        return ['viewer', 'editor', 'admin'].includes(userPermission.role);
+      case 'add':
+        return ['editor', 'admin'].includes(userPermission.role);
+      case 'delete':
+        return userPermission.role === 'admin';
+      default:
+        return false;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -41,8 +65,26 @@ export function getUserRoleOnFolder(
 ): 'viewer' | 'editor' | 'admin' | null {
   if (!folder) return null;
 
-  const userPermission = folder.permissions.find((p) => p.userId === userId);
-  return userPermission ? userPermission.role : null;
+  // Gérer les permissions du backend (format objet)
+  if (folder.permissions && typeof folder.permissions === 'object' && !Array.isArray(folder.permissions)) {
+    const backendPerms = folder.permissions as any;
+
+    // Si l'utilisateur est le créateur du dossier
+    if (folder.createdBy === userId) return 'admin';
+
+    if (backendPerms.canManage) return 'admin';
+    if (backendPerms.canUpload) return 'editor';
+    if (backendPerms.canView) return 'viewer';
+    return null;
+  }
+
+  // Gérer l'ancien format (tableau de permissions)
+  if (Array.isArray(folder.permissions)) {
+    const userPermission = folder.permissions.find((p) => p.userId === userId);
+    return userPermission ? userPermission.role : null;
+  }
+
+  return null;
 }
 
 /**
@@ -58,13 +100,13 @@ export function getAccessibleFolders(
   minRole?: 'viewer' | 'editor' | 'admin'
 ): Folder[] {
   return folders.filter((folder) => {
-    const userPermission = folder.permissions.find((p) => p.userId === userId);
-    if (!userPermission) return false;
+    const userRole = getUserRoleOnFolder(userId, folder);
+    if (!userRole) return false;
 
     if (!minRole) return true;
 
     const roleHierarchy = { viewer: 1, editor: 2, admin: 3 };
-    return roleHierarchy[userPermission.role] >= roleHierarchy[minRole];
+    return roleHierarchy[userRole] >= roleHierarchy[minRole];
   });
 }
 

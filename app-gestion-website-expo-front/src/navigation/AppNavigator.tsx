@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, StyleSheet, Animated, TouchableOpacity, Platform, Easing } from 'react-native';
+import { View, StyleSheet, Animated, TouchableOpacity, Platform, Easing, PanResponder } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import DashboardScreen from '../screens/DashboardScreen';
@@ -9,11 +9,13 @@ import SettingsScreen from '../screens/SettingsScreen';
 import OrganizationScreen from '../screens/OrganizationScreen';
 import CoursesScreen from '../screens/CoursesScreen';
 import CandidatDocumentsScreen from '../screens/CandidatDocumentsScreen';
+import PendingMembersScreen from '../screens/PendingMembersScreen';
 import Sidebar from '../components/layout/Sidebar';
 import Header from '../components/layout/Header';
 import { RootStackParamList, User } from '../types';
 import { menuItems } from '../data/mockData';
 import { isWeb, isLargeScreen } from '../utils/responsive';
+import { getRoleDisplayName, getRoleName, hasRole } from '../utils/roleUtils';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -34,20 +36,22 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
   const filteredMenuItems = React.useMemo(() => {
     if (!currentUser) return menuItems;
 
+    const userRoleDisplay = getRoleDisplayName(currentUser);
+
     return menuItems.filter(item => {
       // Si l'item n'a pas de restriction de rôles, il est visible pour tous
       if (!item.roles || item.roles.length === 0) {
         return true;
       }
 
-      // Sinon, vérifier si le rôle de l'utilisateur est dans la liste
-      return item.roles.includes(currentUser.role);
+      // Vérifier si le rôle de l'utilisateur est dans la liste (par displayName)
+      return item.roles.includes(userRoleDisplay);
     });
   }, [currentUser]);
 
   // Déterminer l'écran initial selon le rôle
   const initialRouteName = React.useMemo(() => {
-    if (currentUser?.role === 'Candidat') {
+    if (hasRole(currentUser, 'candidat')) {
       return 'CandidatDocuments';
     }
     return 'Dashboard';
@@ -104,7 +108,7 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
     >
       <View style={styles.container}>
         {/* Sidebar - Desktop: fixed, Mobile: overlay - Hidden for Candidat */}
-        {isDesktop && currentUser?.role !== 'Candidat' && (
+        {isDesktop && currentUser?.role?.name !== 'candidat' && (
           <Animated.View style={{ width: sidebarWidth, overflow: 'hidden' }}>
             <Sidebar
               activeScreen={currentRoute}
@@ -131,7 +135,7 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
           >
             <Stack.Screen
               name="Dashboard"
-              component={currentUser?.role === 'SuperAdmin' ? SuperAdminDashboardScreen : DashboardScreen}
+              component={currentUser?.isSuperAdmin ? SuperAdminDashboardScreen : DashboardScreen}
               options={{ title: 'Tableau de bord' }}
             />
             <Stack.Screen
@@ -156,6 +160,11 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
               options={{ title: 'Mes documents' }}
             />
             <Stack.Screen
+              name="PendingMembers"
+              component={PendingMembersScreen}
+              options={{ title: 'Demandes en attente' }}
+            />
+            <Stack.Screen
               name="Settings"
               component={SettingsScreen}
               options={{ title: 'Paramètres' }}
@@ -164,7 +173,7 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
         </View>
 
         {/* Mobile Sidebar Overlay - Hidden for Candidat */}
-        {!isDesktop && currentUser?.role !== 'Candidat' && (
+        {!isDesktop && currentUser?.role?.name !== 'candidat' && (
           <>
             {/* Backdrop */}
             <Animated.View

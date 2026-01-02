@@ -8,11 +8,8 @@ import type { Authenticators } from '@adonisjs/auth/types'
  */
 export default class AuthMiddleware {
   /**
-   * The URL to redirect to, when authentication fails
+   * Le guard à utiliser pour l'authentification
    */
-  //redirectTo = '/login'
-  
-
   async handle(
     ctx: HttpContext,
     next: NextFn,
@@ -20,18 +17,38 @@ export default class AuthMiddleware {
       guards?: (keyof Authenticators)[]
     } = {}
   ) {
-    const guards = options.guards ?? ['api']
-    await ctx.auth.authenticateUsing(guards)
+    // Vérifier si le token est passé dans l'URL (pour les iframes/images)
+    const tokenFromUrl = ctx.request.input('token')
+    if (tokenFromUrl) {
+      // Injecter le token dans le header Authorization
+      ctx.request.request.headers['authorization'] = `Bearer ${tokenFromUrl}`
+    }
 
-    const user = ctx.auth.user
-    if (user && !user.isActive) {
-      return ctx.response.unauthorized({
+    await ctx.auth.authenticateUsing(options.guards)
+
+    const user = ctx.auth.user!
+
+    // Vérifier que le compte est actif
+    if (!user.isActive) {
+      return ctx.response.forbidden({
         success: false,
-        message: 'Compte désactivé',
+        message: 'Votre compte est désactivé. Contactez un administrateur.',
       })
     }
 
-    //await ctx.auth.authenticateUsing(options.guards, { loginRoute: this.redirectTo })
+    // Vérifier que le compte n'est pas verrouillé
+    if (user.isLocked) {
+      return ctx.response.forbidden({
+        success: false,
+        message: 'Votre compte est temporairement verrouillé suite à trop de tentatives de connexion.',
+      })
+    }
+
+    // Charger le rôle avec les permissions
+    await user.load('role', (query) => {
+      query.preload('permissions')
+    })
+
     return next()
   }
 }

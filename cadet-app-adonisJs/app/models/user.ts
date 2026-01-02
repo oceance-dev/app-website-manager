@@ -1,13 +1,13 @@
 import { DateTime } from 'luxon'
 import hash from '@adonisjs/core/services/hash'
 import { compose } from '@adonisjs/core/helpers'
-import { BaseModel, beforeSave, belongsTo, column, hasMany, hasOne } from '@adonisjs/lucid/orm'
+import { BaseModel, beforeSave, belongsTo, column, hasMany } from '@adonisjs/lucid/orm'
 import { withAuthFinder } from '@adonisjs/auth/mixins/lucid'
 import { DbAccessTokensProvider } from '@adonisjs/auth/access_tokens'
-import { RolePermissions, UserRole, Permission } from '../../types/HelperPermAndRole.js'
 import RefreshToken from './refresh_token.js'
-import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import Association from './association.js'
+import Role from './role.js'
+import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 
 const AuthFinder = withAuthFinder(() => hash.use('scrypt'), {
   uids: ['email'],
@@ -19,10 +19,16 @@ export default class User extends compose(BaseModel, AuthFinder) {
   declare id: number
 
   /**
-   * Lien avec l'association (null pour admin de l'association)
+   * Lien avec l'association (null pour super_admin CADEP)
    */
   @column()
   declare associationId: number | null
+
+  /**
+   * Lien avec le rôle
+   */
+  @column()
+  declare roleId: number
 
   /**
    * Information de connexion
@@ -30,13 +36,12 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column()
   declare email: string
 
-  @column({ serializeAs: null})
+  @column({ serializeAs: null })
   declare password: string
 
   /**
    * Informations personnelles
    */
-
   @column()
   declare lastname: string
 
@@ -49,18 +54,15 @@ export default class User extends compose(BaseModel, AuthFinder) {
   @column()
   declare phone: string
 
-  @column()
-  declare dateOfBirth: Date
+  @column.dateTime()
+  declare dateOfBirth: DateTime
 
   @column()
   declare sexe: 'Homme' | 'Femme'
 
   /**
-   * Rôle et statut
+   * Statut
    */
-  @column()
-  declare role: UserRole
-
   @column()
   declare isActive: boolean
 
@@ -82,7 +84,6 @@ export default class User extends compose(BaseModel, AuthFinder) {
   /**
    * Timestamps
    */
-  
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
 
@@ -111,13 +112,14 @@ export default class User extends compose(BaseModel, AuthFinder) {
   /**
    * Relations
    */
-
   @belongsTo(() => Association)
   declare association: BelongsTo<typeof Association>
 
+  @belongsTo(() => Role)
+  declare role: BelongsTo<typeof Role>
+
   @hasMany(() => RefreshToken)
   declare refreshTokens: HasMany<typeof RefreshToken>
-
 
   /**
    * Mise à jour de passwordChangedAt
@@ -129,74 +131,120 @@ export default class User extends compose(BaseModel, AuthFinder) {
     }
   }
 
-
   /**
-   * Computed de l'utilisateur
+   * Computed
    */
-
   get fullName(): string {
     return `${this.firstname} ${this.lastname}`
   }
-
-  // Vérifie si le compte est vérrouillé
 
   get isLocked(): boolean {
     if (!this.lockedUntil) return false
     return this.lockedUntil > DateTime.now()
   }
 
-  // Récupère les permission de l'utilisateur basées sur son rôle 
-  get permissions(): Permission[] {
-    return RolePermissions[this.role] || []
-  }
-
   /**
-   * Méthodes de vérifications a une permission spécifique
+   * Méthodes de vérification des permissions
+   * IMPORTANT: Le rôle doit être preload avec ses permissions avant d'utiliser ces méthodes
+   * await user.load('role', (query) => query.preload('permissions'))
    */
 
-  // Vérifié si l'utilisateur a une permission spécifique
-
-  hasPermission(permission: Permission): boolean {
-    return this.permissions.includes(permission)
+  // Récupère les noms des permissions depuis le rôle
+  get permissions(): string[] {
+    if (!this.role || !this.role.permissions) return []
+    return this.role.permissions.map((p) => p.name)
   }
 
-  // Vérifie si l'utilisateur à toutes les permissions spécifiées
-  hasAllPermissions(permissions: Permission[]): boolean {
-    return permissions.every((p) => this.hasPermission(p)) 
+  // Vérifie si l'utilisateur a une permission spécifique
+  hasPermission(permissionName: string): boolean {
+    // Super admin a toutes les permissions
+    if (this.isSuperAdmin) return true
+    return this.permissions.includes(permissionName)
   }
 
-  // Vérifie si l'utilisateur a au moins une des permissions spécifiés
-  hasAnyPermission(permissions: Permission[]): boolean {
-    return permissions.some((p) => this.hasPermission(p))
+  // Vérifie si l'utilisateur a toutes les permissions spécifiées
+  hasAllPermissions(permissionNames: string[]): boolean {
+    if (this.isSuperAdmin) return true
+    return permissionNames.every((p) => this.permissions.includes(p))
+  }
+
+  // Vérifie si l'utilisateur a au moins une des permissions spécifiées
+  hasAnyPermission(permissionNames: string[]): boolean {
+    if (this.isSuperAdmin) return true
+    return permissionNames.some((p) => this.permissions.includes(p))
+  }
+
+  // Vérifie si l'utilisateur a un rôle spécifique (par nom)
+  hasRole(roleName: string): boolean {
+    return this.role?.name === roleName
   }
 
   // Vérifie si l'utilisateur a un des rôles spécifiés
-
-  hasAnyRole(roles: UserRole[]): boolean {
-    return roles.includes(this.role);
+  hasAnyRole(roleNames: string[]): boolean {
+    if (!this.role) return false
+    return roleNames.includes(this.role.name)
   }
 
   // Vérifie si l'utilisateur est super admin
+  get isSuperAdmin(): boolean {
+    return this.role?.name === 'super_admin'
+  }
+
+  // Vérifie si l'utilisateur est admin (admin ou super_admin)
   get isAdmin(): boolean {
-    return this.role === UserRole.ADMIN || this.role === UserRole.SUPER_ADMIN
+    return this.role?.name === 'admin' || this.role?.name === 'super_admin'
+  }
+
+  // Vérifie si l'utilisateur fait partie du bureau (président, trésorier, secrétaire)
+  get isBureau(): boolean {
+    const bureauRoles = ['president', 'tresorier', 'secretaire', 'admin', 'super_admin']
+    return this.role ? bureauRoles.includes(this.role.name) : false
+  }
+
+  // Vérifie si l'utilisateur est un encadrant (staff, formateur, directeur formation)
+  get isEncadrant(): boolean {
+    const encadrantRoles = ['staff', 'formateur', 'directeur_formation', 'president', 'admin', 'super_admin']
+    return this.role ? encadrantRoles.includes(this.role.name) : false
+  }
+
+  // Retourne le niveau du rôle
+  get roleLevel(): Number {
+    return this.role?.level ?? 0
+  }
+
+  // Vérifie si ce user a un rôle supérieur ou égal à un autre user
+  isHigherOrEqualThan(otherUser: User): boolean {
+    return this.roleLevel >= otherUser.roleLevel
+  }
+
+  // Vérifie si ce user a un rôle strictement supérieur à un autre
+  isHigherThan(otherUser: User): boolean {
+    return this.roleLevel > otherUser.roleLevel
+  }
+
+  // Vérifie si ce user peut gérer un autre user (niveau strictement supérieur)
+  canManage(otherUser: User): boolean {
+    // Super admin peut gérer tout le monde
+    if (this.isSuperAdmin) return true
+    // On ne peut pas se gérer soi-même pour certaines actions
+    if (this.id === otherUser.id) return false
+    // On peut gérer seulement les utilisateurs de niveau inférieur
+    return this.isHigherThan(otherUser)
   }
 
   /**
    * Méthode de gestion du compte
    */
-
-  // Enregistre une tentative de connexion échouée
   async recordFailedLogin(): Promise<void> {
     this.failedLoginAttempts += 1
 
     if (this.failedLoginAttempts >= 5) {
-      this.lockedUntil = DateTime.now().plus({ minutes: 15})
+      this.lockedUntil = DateTime.now().plus({ minutes: 15 })
     }
 
     await this.save()
   }
 
-  // Réinitialise les tentatives de connexion après une connexion réussie
   async recordSuccessfulLogin(ip: string): Promise<void> {
     this.failedLoginAttempts = 0
     this.lockedUntil = null
@@ -206,9 +254,22 @@ export default class User extends compose(BaseModel, AuthFinder) {
   }
 
   /**
-   * Sérialisation
+   * Charger le rôle avec les permissions
    */
-  //Sérialisation personnalisée pour l'api
+  async loadRoleWithPermissions(): Promise<void> {
+   const user = await User.query()
+      .where('id', this.id)
+      .preload('role', (query) => {
+        query.preload('permissions')
+      })
+      .firstOrFail()
+    
+    this.role = user.role
+  }
+
+  /**
+   * Sérialisation pour l'API
+   */
   serialize() {
     return {
       id: this.id,
@@ -216,16 +277,19 @@ export default class User extends compose(BaseModel, AuthFinder) {
       email: this.email,
       firstName: this.firstname,
       lastName: this.lastname,
-      dateOfBirth: this.dateOfBirth,
+      fullName: this.fullName,
+      dateOfBirth: this.dateOfBirth?.toISO(),
       phone: this.phone,
       city_code: this.city_code,
       sexe: this.sexe,
-      role: this.role,
+      role: this.role?.serializeBasic() ?? null,
       permissions: this.permissions,
       isActive: this.isActive,
+      isSuperAdmin: this.isSuperAdmin,
+      isAdmin: this.isAdmin,
       emailVerifiedAt: this.emailVerifiedAt?.toISO(),
       lastLoginAt: this.lastLoginAt?.toISO(),
-      createdAt: this.createdAt.toISO(),
+      createdAt: this.createdAt?.toISO(),
       updatedAt: this.updatedAt?.toISO(),
     }
   }

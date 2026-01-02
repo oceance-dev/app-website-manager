@@ -18,7 +18,7 @@ import DatePickerWrapper from '../helperComponents/DatePickerWrapper';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { getDepartmentFromPostalCode, isValidPostalCode, Department } from '../../utils/department';
-import { CandidatsApi, ApiError, AuthApi, AssociationsApi } from '../../api';
+import { CandidatsApi, ApiError, AuthApi, AssociationsApi, RolesApi, Role } from '../../api';
 
 type UserType = 'candidat' | 'cadet' | 'organization' | 'admin_member' | null;
 
@@ -61,7 +61,6 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
   const [currentStep, setCurrentStep] = useState(0);
   const [departmentInfo, setDepartmentInfo] = useState<Department | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedAdminRole, setSelectedAdminRole] = useState<'Président' | 'Directeur de formation' | 'Trésorier' | 'Encadrant'>('Trésorier');
   const [selectedAssociationId, setSelectedAssociationId] = useState<number | null>(null);
   const [associations, setAssociations] = useState<Array<{ id: number; name: string; postalCode: string }>>([]);
 
@@ -93,6 +92,68 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
 
     loadAssociations();
   }, []);
+
+  // Charger les rôles disponibles - utilise un token temporaire vide car l'endpoint nécessite l'authentification
+  // mais pour l'inscription, on charge les rôles publics
+  React.useEffect(() => {
+    const loadRoles = async () => {
+      try {
+        // Pour l'instant, nous allons définir les rôles manuellement car l'endpoint nécessite l'authentification
+        // À terme, il faudrait créer un endpoint public pour récupérer les rôles disponibles à l'inscription
+        const defaultRoles: Role[] = [
+          { id: 3, name: 'president', displayName: 'Président', level: 80, isActive: true, createdAt: '', updatedAt: '' },
+          { id: 4, name: 'directeur_formation', displayName: 'Directeur de formation', level: 70, isActive: true, createdAt: '', updatedAt: '' },
+          { id: 5, name: 'tresorier', displayName: 'Trésorier', level: 60, isActive: true, createdAt: '', updatedAt: '' },
+          { id: 6, name: 'formateur', displayName: 'Encadrant', level: 50, isActive: true, createdAt: '', updatedAt: '' },
+        ];
+
+        setAvailableRoles(defaultRoles);
+        // Sélectionner le rôle Trésorier par défaut (id: 5)
+        setSelectedRoleId(5);
+        console.log('✅ Roles loaded:', defaultRoles.length);
+      } catch (error) {
+        console.error('Failed to load roles:', error);
+        setAvailableRoles([]);
+      }
+    };
+
+    loadRoles();
+  }, []);
+
+  // Charger les rôles occupés quand une association est sélectionnée
+  React.useEffect(() => {
+    const loadOccupiedRoles = async () => {
+      if (!selectedAssociationId) {
+        setOccupiedRoleNames([]);
+        return;
+      }
+
+      try {
+        const response = await AssociationsApi.getOccupiedRoles(selectedAssociationId);
+
+        if (response.success && response.data) {
+          // Les noms de rôles backend (president, directeur_formation)
+          const occupiedRoleNames = response.data.roles;
+          setOccupiedRoleNames(occupiedRoleNames);
+          console.log('✅ Occupied roles loaded:', occupiedRoleNames);
+
+          // Si le rôle sélectionné est occupé, sélectionner un autre rôle disponible
+          const selectedRole = availableRoles.find(r => r.id === selectedRoleId);
+          if (selectedRole && occupiedRoleNames.includes(selectedRole.name)) {
+            const firstAvailableRole = availableRoles.find(role => !occupiedRoleNames.includes(role.name));
+            if (firstAvailableRole) {
+              setSelectedRoleId(firstAvailableRole.id);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load occupied roles:', error);
+        setOccupiedRoleNames([]);
+      }
+    };
+
+    loadOccupiedRoles();
+  }, [selectedAssociationId, availableRoles, selectedRoleId]);
 
   // Gérer le changement de code postal
   const handlePostalCodeChange = (postalCode: string, isOrg: boolean = false) => {
@@ -227,37 +288,22 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
           throw new Error(`Champs manquants: ${missingFields.join(', ')}`);
         }
 
-        // Mapper le rôle frontend vers le format backend
-        const roleMapping: Record<string, string> = {
-          'Président': 'président',
-          'Directeur de formation': 'directeur_formation',
-          'Trésorier': 'tresorier',
-          'Encadrant': 'formateur',
-        };
-
-        console.log('Selected admin role:', selectedAdminRole);
-        console.log('Mapped backend role:', roleMapping[selectedAdminRole]);
-
-        const backendRole = roleMapping[selectedAdminRole] || 'formateur';
-
         console.log('🚀 Starting member registration...');
-        console.log('Backend role:', backendRole);
         console.log('Association ID:', selectedAssociationId);
 
         try {
           const payload = {
             associationMember: {
-              firstname: signData.firstname,
-              lastname: signData.lastname,
-              email: signData.email,
-              password: signData.password,
-              passwordConfirmation: signData.confirmPassword,
-              phone: signData.phone,
-              city_code: signData.postalCode,
-              dateOfBirth: signData.dateOfbirth,
+              firstname: signData.firstname || '',
+              lastname: signData.lastname || '',
+              email: signData.email || '',
+              password: signData.password || '',
+              passwordConfirmation: signData.confirmPassword || '',
+              phone: signData.phone || '',
+              city_code: signData.postalCode || '',
+              dateOfBirth: signData.dateOfbirth || '',
               sexe: signData.sexe === 0 ? 'Homme' : 'Femme',
               associationId: selectedAssociationId,
-              role: backendRole,
             },
           };
 
@@ -270,27 +316,18 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
           if (response.success && response.data) {
             console.log('✅ Member registered via API');
 
-            const newUser: User = {
-              id: response.data.user.id,
-              lastname: signData.lastname,
-              firstname: signData.firstname,
-              email: signData.email,
-              role: selectedAdminRole,
-              statut: 'Actif',
-              phone: signData.phone || '',
-              dateOfbirth: signData.dateOfbirth,
-              sexe: signData.sexe,
-              courseAccess: selectedAdminRole === 'Encadrant',
-              postalCode: signData.postalCode,
-            };
+            const validationMessage = `Inscription réussie !\n\n⏳ Votre compte doit être validé par un administrateur de votre association avant de pouvoir vous connecter.\n\nL'administrateur vous attribuera un rôle lors de la validation.\n\nVous recevrez un email de confirmation une fois votre compte activé.`;
 
             if (isWeb) {
-              alert(response.message || `Inscription réussie en tant que ${selectedAdminRole} !`);
+              alert(validationMessage);
             } else {
-              Alert.alert('Succès', response.message || `Inscription réussie en tant que ${selectedAdminRole} !`);
+              Alert.alert('Inscription réussie', validationMessage);
             }
 
-            onSign(newUser);
+            // Rediriger vers la page de login au lieu de connecter automatiquement
+            if (onNavigateToLogin) {
+              onNavigateToLogin();
+            }
           }
         } catch (apiError) {
           console.error('⚠️ Member registration failed:', apiError);
@@ -938,125 +975,8 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
                   </View>
                 )}
 
-                {/* Étape 2 : Choix du rôle */}
+                {/* Étape 2 : Sélection de l'association */}
                 {currentStep === 2 && (
-                  <View style={styles.stepContainer}>
-                    <Text style={styles.stepTitle}>Votre rôle dans l'association</Text>
-                    <Text style={styles.subtitle}>Sélectionnez votre fonction</Text>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.roleCard,
-                        selectedAdminRole === 'Président' && styles.roleCardActive
-                      ]}
-                      onPress={() => setSelectedAdminRole('Président')}
-                    >
-                      <View style={styles.roleHeader}>
-                        <Text style={[
-                          styles.roleTitle,
-                          selectedAdminRole === 'Président' && styles.roleTextActive
-                        ]}>
-                          Président
-                        </Text>
-                        {selectedAdminRole === 'Président' && (
-                          <View style={styles.checkmark}>
-                            <Text style={styles.checkmarkText}>✓</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.roleDescription}>
-                        Direction de l'association et gestion globale
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.roleCard,
-                        selectedAdminRole === 'Directeur de formation' && styles.roleCardActive
-                      ]}
-                      onPress={() => setSelectedAdminRole('Directeur de formation')}
-                    >
-                      <View style={styles.roleHeader}>
-                        <Text style={[
-                          styles.roleTitle,
-                          selectedAdminRole === 'Directeur de formation' && styles.roleTextActive
-                        ]}>
-                          Directeur de formation
-                        </Text>
-                        {selectedAdminRole === 'Directeur de formation' && (
-                          <View style={styles.checkmark}>
-                            <Text style={styles.checkmarkText}>✓</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.roleDescription}>
-                        Responsable de la formation et de l'encadrement des cadets
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.roleCard,
-                        selectedAdminRole === 'Trésorier' && styles.roleCardActive
-                      ]}
-                      onPress={() => setSelectedAdminRole('Trésorier')}
-                    >
-                      <View style={styles.roleHeader}>
-                        <Text style={[
-                          styles.roleTitle,
-                          selectedAdminRole === 'Trésorier' && styles.roleTextActive
-                        ]}>
-                          Trésorier
-                        </Text>
-                        {selectedAdminRole === 'Trésorier' && (
-                          <View style={styles.checkmark}>
-                            <Text style={styles.checkmarkText}>✓</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.roleDescription}>
-                        Gestion comptable et accès aux documents financiers
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.roleCard,
-                        selectedAdminRole === 'Encadrant' && styles.roleCardActive
-                      ]}
-                      onPress={() => setSelectedAdminRole('Encadrant')}
-                    >
-                      <View style={styles.roleHeader}>
-                        <Text style={[
-                          styles.roleTitle,
-                          selectedAdminRole === 'Encadrant' && styles.roleTextActive
-                        ]}>
-                          Encadrant
-                        </Text>
-                        {selectedAdminRole === 'Encadrant' && (
-                          <View style={styles.checkmark}>
-                            <Text style={styles.checkmarkText}>✓</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.roleDescription}>
-                        Gestion des cadets et accès aux cours et documents de formation
-                      </Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.buttonRow}>
-                      <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
-                        Précédent
-                      </Button>
-                      <Button onPress={handleNext} style={styles.halfButton}>
-                        Continuer
-                      </Button>
-                    </View>
-                  </View>
-                )}
-
-                {/* Étape 3 : Sélection de l'association */}
-                {currentStep === 3 && (
                   <View style={styles.stepContainer}>
                     <Text style={styles.stepTitle}>Sélection de l'association</Text>
                     <Text style={styles.subtitle}>Choisissez votre association</Text>
@@ -1126,6 +1046,78 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
                   </View>
                 )}
 
+                {/* Étape 3 : Choix du rôle */}
+                {currentStep === 3 && (
+                  <View style={styles.stepContainer}>
+                    <Text style={styles.stepTitle}>Votre rôle dans l'association</Text>
+                    <Text style={styles.subtitle}>Sélectionnez votre fonction</Text>
+
+                    {availableRoles.length === 0 ? (
+                      <View style={{ padding: 20, alignItems: 'center' }}>
+                        <ActivityIndicator size="large" color="#3b82f6" />
+                        <Text style={{ color: '#64748b', textAlign: 'center', marginTop: 12 }}>
+                          Chargement des rôles...
+                        </Text>
+                      </View>
+                    ) : (
+                      <>
+                        {availableRoles
+                          .filter(role => !occupiedRoleNames.includes(role.name))
+                          .map((role) => {
+                            // Descriptions des rôles
+                            const roleDescriptions: Record<string, string> = {
+                              'president': 'Direction de l\'association et gestion globale',
+                              'directeur_formation': 'Responsable de la formation et de l\'encadrement des cadets',
+                              'tresorier': 'Gestion comptable et accès aux documents financiers',
+                              'formateur': 'Gestion des cadets et accès aux cours et documents de formation',
+                            };
+
+                            return (
+                              <TouchableOpacity
+                                key={role.id}
+                                style={[
+                                  styles.roleCard,
+                                  selectedRoleId === role.id && styles.roleCardActive
+                                ]}
+                                onPress={() => setSelectedRoleId(role.id)}
+                              >
+                                <View style={styles.roleHeader}>
+                                  <Text style={[
+                                    styles.roleTitle,
+                                    selectedRoleId === role.id && styles.roleTextActive
+                                  ]}>
+                                    {role.displayName}
+                                  </Text>
+                                  {selectedRoleId === role.id && (
+                                    <View style={styles.checkmark}>
+                                      <Text style={styles.checkmarkText}>✓</Text>
+                                    </View>
+                                  )}
+                                </View>
+                                <Text style={styles.roleDescription}>
+                                  {roleDescriptions[role.name] || role.description || 'Aucune description disponible'}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                      </>
+                    )}
+
+                    <View style={styles.buttonRow}>
+                      <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
+                        Précédent
+                      </Button>
+                      <Button
+                        onPress={handleNext}
+                        style={styles.halfButton}
+                        disabled={!selectedRoleId}
+                      >
+                        Continuer
+                      </Button>
+                    </View>
+                  </View>
+                )}
+
                 {/* Étape 4 : Création du compte */}
                 {currentStep === 4 && (
                   <View style={styles.stepContainer}>
@@ -1164,7 +1156,9 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
                       <Text style={styles.summaryText}>
                         {signData.firstname} {signData.lastname}
                       </Text>
-                      <Text style={styles.summaryLabel}>Rôle : {selectedAdminRole}</Text>
+                      <Text style={styles.summaryLabel}>
+                        Rôle : {availableRoles.find(r => r.id === selectedRoleId)?.displayName || 'Non sélectionné'}
+                      </Text>
                       <Text style={styles.summaryLabel}>Association : {associations.find(a => a.id === selectedAssociationId)?.name || 'Non sélectionnée'}</Text>
                       <Text style={styles.summaryLabel}>{signData.email}</Text>
                     </View>

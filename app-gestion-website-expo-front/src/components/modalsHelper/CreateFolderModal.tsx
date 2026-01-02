@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -7,12 +7,15 @@ import {
   TouchableOpacity,
   ScrollView,
   FlatList,
+  StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { X, Check } from 'lucide-react-native';
 import { Folder, User, FolderPermission } from '../../types';
 import { getRoleDisplay } from '../../utils/permissions';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { RolesApi, Role } from '../../api/roles.api';
 
 interface CreateFolderModalProps {
   visible: boolean;
@@ -21,6 +24,12 @@ interface CreateFolderModalProps {
   users: User[];
   currentUserId: number;
   parentFolder?: Folder | null;
+}
+
+interface RolePermission {
+  roleId: number;
+  roleName: string;
+  permission: 'viewer' | 'editor' | 'admin';
 }
 
 export default function CreateFolderModal({
@@ -32,9 +41,32 @@ export default function CreateFolderModal({
   parentFolder = null,
 }: CreateFolderModalProps) {
   const [folderName, setFolderName] = useState('');
-  const [selectedPermissions, setSelectedPermissions] = useState<FolderPermission[]>([
-    { userId: currentUserId, role: 'admin' }, // L'utilisateur actuel est admin par défaut
-  ]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [loadingRoles, setLoadingRoles] = useState(false);
+  const [selectedRolePermissions, setSelectedRolePermissions] = useState<RolePermission[]>([]);
+
+  // Charger les rôles quand la modal s'ouvre
+  useEffect(() => {
+    if (visible) {
+      loadRoles();
+    }
+  }, [visible]);
+
+  const loadRoles = async () => {
+    try {
+      setLoadingRoles(true);
+      const response = await RolesApi.getAll();
+      if (response.success && response.data) {
+        // Filtrer les super_admin
+        const filteredRoles = response.data.roles.filter((role) => role.name !== 'super_admin');
+        setRoles(filteredRoles);
+      }
+    } catch (error) {
+      console.error('Error loading roles:', error);
+    } finally {
+      setLoadingRoles(false);
+    }
+  };
 
   const handleSubmit = () => {
     if (folderName.trim()) {
@@ -42,65 +74,62 @@ export default function CreateFolderModal({
         name: folderName,
         parentId: parentFolder?.id || null,
         createdBy: currentUserId,
-        permissions: selectedPermissions,
+        permissions: [], // Les permissions de rôles seront gérées côté backend
       });
       setFolderName('');
-      setSelectedPermissions([{ userId: currentUserId, role: 'admin' }]);
+      setSelectedRolePermissions([]);
       onClose();
     }
   };
 
-  const updateUserPermission = (userId: number, role: 'viewer' | 'editor' | 'admin' | null) => {
-    if (role === null) {
-      setSelectedPermissions(selectedPermissions.filter((p) => p.userId !== userId));
+  const updateRolePermission = (roleId: number, roleName: string, permission: 'viewer' | 'editor' | 'admin' | null) => {
+    if (permission === null) {
+      setSelectedRolePermissions(selectedRolePermissions.filter((p) => p.roleId !== roleId));
     } else {
-      const existingIndex = selectedPermissions.findIndex((p) => p.userId === userId);
+      const existingIndex = selectedRolePermissions.findIndex((p) => p.roleId === roleId);
       if (existingIndex >= 0) {
-        const updated = [...selectedPermissions];
-        updated[existingIndex] = { userId, role };
-        setSelectedPermissions(updated);
+        const updated = [...selectedRolePermissions];
+        updated[existingIndex] = { roleId, roleName, permission };
+        setSelectedRolePermissions(updated);
       } else {
-        setSelectedPermissions([...selectedPermissions, { userId, role }]);
+        setSelectedRolePermissions([...selectedRolePermissions, { roleId, roleName, permission }]);
       }
     }
   };
 
-  const getUserPermission = (userId: number): 'viewer' | 'editor' | 'admin' | null => {
-    const permission = selectedPermissions.find((p) => p.userId === userId);
-    return permission ? permission.role : null;
+  const getRolePermission = (roleId: number): 'viewer' | 'editor' | 'admin' | null => {
+    const permission = selectedRolePermissions.find((p) => p.roleId === roleId);
+    return permission ? permission.permission : null;
   };
 
-  const renderUserPermission = ({ item }: { item: User }) => {
-    const currentRole = getUserPermission(item.id);
-    const isCurrentUser = item.id === currentUserId;
+  const renderRolePermission = ({ item }: { item: Role }) => {
+    const currentPermission = getRolePermission(item.id);
 
     return (
-      <View className="flex-row justify-between items-center py-3 px-1 border-b border-slate-100">
-        <View className="flex-1">
-          <Text className="text-sm font-semibold text-slate-800 mb-0.5">
-            {item.firstname} {item.lastname}
-          </Text>
-          <Text className="text-xs text-slate-600">{item.role}</Text>
+      <View style={styles.userRow}>
+        <View style={styles.userInfo}>
+          <Text style={styles.userName}>{item.displayName}</Text>
+          <Text style={styles.userRole}>Niveau {item.level}</Text>
         </View>
 
-        <View className="flex-row gap-2">
-          {(['viewer', 'editor', 'admin'] as const).map((role) => {
-            const isSelected = currentRole === role;
-            const display = getRoleDisplay(role);
+        <View style={styles.permissionButtons}>
+          {(['viewer', 'editor', 'admin'] as const).map((permission) => {
+            const isSelected = currentPermission === permission;
+            const display = getRoleDisplay(permission);
 
             return (
               <TouchableOpacity
-                key={role}
-                className={`w-10 h-10 rounded-lg items-center justify-center relative ${
-                  isSelected ? '' : 'bg-slate-100'
-                }`}
-                style={isSelected ? { backgroundColor: display.color } : {}}
-                onPress={() => updateUserPermission(item.id, isSelected ? null : role)}
-                disabled={isCurrentUser && role === 'admin'} // Empêcher de se retirer en tant qu'admin
+                key={permission}
+                style={[
+                  styles.permissionButton,
+                  !isSelected && styles.permissionButtonUnselected,
+                  isSelected && { backgroundColor: display.color }
+                ]}
+                onPress={() => updateRolePermission(item.id, item.name, isSelected ? null : permission)}
               >
-                <Text className="text-lg">{display.icon}</Text>
+                <Text style={styles.permissionIcon}>{display.icon}</Text>
                 {isSelected && (
-                  <View className="absolute top-0.5 right-0.5">
+                  <View style={styles.checkBadge}>
                     <Check color="#fff" size={12} />
                   </View>
                 )}
@@ -114,26 +143,26 @@ export default function CreateFolderModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 bg-black/50 justify-center items-center p-5">
-        <View className="bg-white rounded-2xl w-full max-w-2xl" style={{ maxHeight: '90%' }}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
           {/* Header */}
-          <View className="flex-row justify-between items-start p-5 border-b border-slate-200">
+          <View style={styles.header}>
             <View>
-              <Text className="text-xl font-bold text-slate-800 mb-1">
+              <Text style={styles.headerTitle}>
                 Créer un nouveau dossier
               </Text>
               {parentFolder && (
-                <Text className="text-sm text-slate-600">Dans : {parentFolder.name}</Text>
+                <Text style={styles.headerSubtitle}>Dans : {parentFolder.name}</Text>
               )}
             </View>
-            <TouchableOpacity onPress={onClose} className="p-1">
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <X color="#64748b" size={24} />
             </TouchableOpacity>
           </View>
 
           {/* Content */}
-          <ScrollView className="p-5">
-            <View className="mb-6">
+          <ScrollView style={styles.content}>
+            <View style={styles.inputSection}>
               <Input
                 label="Nom du dossier"
                 placeholder="Ex: Rapports 2025"
@@ -142,36 +171,43 @@ export default function CreateFolderModal({
               />
             </View>
 
-            <View className="mb-6">
-              <Text className="text-sm font-semibold text-slate-700 mb-2">
+            <View style={styles.permissionsSection}>
+              <Text style={styles.sectionTitle}>
                 Autorisations d'accès
               </Text>
-              <View className="flex-row gap-4 mb-3 px-1">
-                <View className="flex-row items-center gap-1">
-                  <Text className="text-base">👁️</Text>
-                  <Text className="text-xs text-slate-600">Voir</Text>
+              <View style={styles.legendRow}>
+                <View style={styles.legendItem}>
+                  <Text style={styles.legendIcon}>👁️</Text>
+                  <Text style={styles.legendText}>Voir</Text>
                 </View>
-                <View className="flex-row items-center gap-1">
-                  <Text className="text-base">✏️</Text>
-                  <Text className="text-xs text-slate-600">Ajouter</Text>
+                <View style={styles.legendItem}>
+                  <Text style={styles.legendIcon}>✏️</Text>
+                  <Text style={styles.legendText}>Ajouter</Text>
                 </View>
-                <View className="flex-row items-center gap-1">
-                  <Text className="text-base">🔑</Text>
-                  <Text className="text-xs text-slate-600">Admin</Text>
+                <View style={styles.legendItem}>
+                  <Text style={styles.legendIcon}>🔑</Text>
+                  <Text style={styles.legendText}>Admin</Text>
                 </View>
               </View>
 
-              <FlatList
-                data={users}
-                renderItem={renderUserPermission}
-                keyExtractor={(item) => item.id.toString()}
-                scrollEnabled={false}
-              />
+              {loadingRoles ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#2563eb" />
+                  <Text style={styles.loadingText}>Chargement des rôles...</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={roles}
+                  renderItem={renderRolePermission}
+                  keyExtractor={(item) => item.id.toString()}
+                  scrollEnabled={false}
+                />
+              )}
             </View>
           </ScrollView>
 
           {/* Footer */}
-          <View className="flex-row p-5 gap-3 border-t border-slate-200">
+          <View style={styles.footer}>
             <Button variant="secondary" onPress={onClose} className="flex-1">
               Annuler
             </Button>
@@ -189,3 +225,136 @@ export default function CreateFolderModal({
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 700,
+    maxHeight: '90%',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#475569',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  content: {
+    padding: 20,
+  },
+  inputSection: {
+    marginBottom: 24,
+  },
+  permissionsSection: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 8,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendIcon: {
+    fontSize: 16,
+  },
+  legendText: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  userRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  userInfo: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 2,
+  },
+  userRole: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  permissionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  permissionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  permissionButtonUnselected: {
+    backgroundColor: '#f1f5f9',
+  },
+  permissionIcon: {
+    fontSize: 18,
+  },
+  checkBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#64748b',
+  },
+  footer: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+});

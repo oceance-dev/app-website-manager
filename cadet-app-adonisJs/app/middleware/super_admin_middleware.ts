@@ -2,30 +2,22 @@ import type { HttpContext } from '@adonisjs/core/http'
 import type { NextFn } from '@adonisjs/core/types/http'
 
 export default class SuperAdminMiddleware {
-  async handle(ctx: HttpContext, next: NextFn) {
-    const user = ctx.auth.user
+  async handle({ auth, response }: HttpContext, next: NextFn) {
+    const user = auth.user!
 
-    if (!user) {
-      return ctx.response.unauthorized({
+    // Charger le rôle si pas déjà fait
+    if (!user.role) {
+      await user.load('role')
+    }
+
+    // Vérifier que c'est un super admin
+    if (user.role?.name !== 'super_admin') {
+      return response.forbidden({
         success: false,
-        message: 'Non authentifié'
+        message: 'Accès réservé aux super administrateurs',
       })
     }
 
-    if (!user.isAdmin) {
-      return ctx.response.forbidden({
-        success: false,
-        message: 'Accès réservé aux administrateurs de l\'application',
-      })
-    }
-    /**
-     * Middleware logic goes here (before the next call)
-     */
-    console.log(ctx)
-
-    /**
-     * Call next method in the pipeline and return its output
-     */
     return next()
   }
 }

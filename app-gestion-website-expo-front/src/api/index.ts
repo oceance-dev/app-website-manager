@@ -19,10 +19,12 @@
 // Export des services API
 export { CadetsApi } from './cadets.api';
 export { DocumentsApi } from './documents.api';
+export { FoldersApi } from './folders.api';
 export { CandidatsApi } from './candidats.api';
 export { AuthApi } from './auth.api';
 export { AssociationsApi } from './associations.api';
 export { UsersApi } from './users.api';
+export { RolesApi } from './roles.api';
 
 // Export de la configuration et des utilitaires
 export { API_CONFIG, ApiError, getAuthHeaders, handleApiResponse } from './config';
@@ -40,14 +42,6 @@ export {
 // Export des types
 export type {
 
-  // Documents
-  DocumentResponse,
-  GetAllDocumentsResponse,
-  GetCourseDocumentsResponse,
-  UpdateDocumentPermissionsRequest,
-  UpdateDocumentPermissionsResponse,
-  DocumentsFilterParams,
-
   // Authentification
   LoginRequest,
   LoginResponse,
@@ -57,6 +51,14 @@ export type {
   // Pagination
   PaginationParams,
 } from './types';
+
+// Documents
+export type {
+  Document,
+  GetAllDocumentsResponse as DocumentsGetAllResponse,
+  UploadDocumentData,
+  DocumentWithDownloadUrl,
+} from './documents.api';
 
 // Cadets
 export type {
@@ -102,3 +104,23 @@ export type {
   GetAllUsersResponse,
   UsersFilterParams,
 } from './users.api';
+
+// Roles
+export type {
+  Role,
+  Permission,
+  RoleWithPermissions,
+  GetRolesResponse,
+} from './roles.api';
+
+// Folders
+export type {
+  Folder,
+  FolderMember,
+  FolderWithMembers,
+  CreateFolderData,
+  UpdateFolderData,
+  AddFolderMemberData,
+  UpdateFolderMemberData,
+  MoveDocumentData,
+} from './folders.api';

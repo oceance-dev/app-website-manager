@@ -8,18 +8,23 @@ import {
   FlatList,
   Modal,
   Switch,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Plus, Eye, Download, Trash2, Folder as FolderIcon, ChevronRight, Lock, X, FolderDown } from 'lucide-react-native';
 import { Document, Folder, User, DocumentPermission } from '../types';
 import { initialDocuments, initialFolders, initialUtilisateurs, courseDocuments } from '../data/mockData';
 import AddDocumentModal from '../components/modalsHelper/AddDocumentModal';
 import CreateFolderModal from '../components/modalsHelper/CreateFolderModal';
+import DocumentViewerModal from '../components/modalsHelper/DocumentViewerModal';
 import { canUserAccessFolder, getUserRoleOnFolder, getRoleDisplay } from '../utils/permissions';
 import { isWeb } from '../utils/responsive';
 import { Button } from '../components/ui/button';
+import { DocumentsApi, FoldersApi, AuthApi, AssociationsApi, type AuthUser } from '../api';
+import { tokenStorage } from '../api/tokenStorage';
 
 export default function DocumentsScreen() {
-  const [documents, setDocuments] = useState<Document[]>([...initialDocuments, ...courseDocuments]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [folders, setFolders] = useState<Folder[]>(initialFolders);
   const [currentFolderId, setCurrentFolderId] = useState<number | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -27,9 +32,18 @@ export default function DocumentsScreen() {
   const [showPermissionsModal, setShowPermissionsModal] = useState(false);
   const [selectedDocumentForPermissions, setSelectedDocumentForPermissions] = useState<Document | null>(null);
   const [tempPermissions, setTempPermissions] = useState<DocumentPermission[]>([]);
-  const currentUserId = 1; // ID de l'utilisateur connecté (à remplacer par la vraie valeur)
+  const [uploadingDocument, setUploadingDocument] = useState(false);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [currentAuthUser, setCurrentAuthUser] = useState<AuthUser | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
+  const [showViewerModal, setShowViewerModal] = useState(false);
+  const [viewerDocumentUrl, setViewerDocumentUrl] = useState<string | null>(null);
+  const [viewerDocumentName, setViewerDocumentName] = useState('');
+  const [viewerDocumentMimeType, setViewerDocumentMimeType] = useState('');
+  const [associationMembers, setAssociationMembers] = useState<User[]>([]);
 
   const currentFolder = folders.find((f) => f.id === currentFolderId);
+  const currentUserId = currentAuthUser?.id || 1;
   const currentUser = initialUtilisateurs.find((u) => u.id === currentUserId);
 
   // Get all cadets for permissions management
@@ -37,15 +51,252 @@ export default function DocumentsScreen() {
     user.role === 'Cadet' || user.role === 'Ancien Cadet'
   );
 
-  // Check if current user can manage permissions
-  const canManagePermissions = currentUser && (currentUser.role === 'Admin' || currentUser.role === 'Encadrant');
+  // Récupérer l'utilisateur connecté
+  const fetchCurrentUser = async () => {
+    try {
+      setLoadingUser(true);
+      const response = await AuthApi.getMe();
+      if (response.success && response.data?.user) {
+        setCurrentAuthUser(response.data.user);
+        console.log('👤 Current user:', response.data.user);
+      }
+    } catch (error) {
+      console.error('Error loading current user:', error);
+    } finally {
+      setLoadingUser(false);
+    }
+  };
+
+  // Charger l'utilisateur au montage
+  React.useEffect(() => {
+    fetchCurrentUser();
+  }, []);
+
+  // Charger les documents depuis la BDD
+  const fetchDocuments = async () => {
+    try {
+      setLoadingDocuments(true);
+      const response = await DocumentsApi.getAll();
+
+      if (response.success && response.data) {
+        // Mapper les documents de l'API au format local
+        const mappedDocuments: Document[] = response.data.documents.map((doc) => ({
+          id: doc.id,
+          nameDoc: doc.name,
+          folderId: doc.folderId || null,
+          type: getFileType(doc.fileName),
+          length: formatFileSize(doc.fileSize),
+          date: new Date(doc.createdAt).toISOString().split('T')[0],
+          uploadedBy: doc.userId,
+          uri: doc.filePath,
+          mimeType: doc.mimeType,
+        }));
+
+        setDocuments(mappedDocuments);
+      }
+    } catch (error) {
+      console.error('Error loading documents:', error);
+      if (isWeb) {
+        alert('Erreur lors du chargement des documents');
+      } else {
+        Alert.alert('Erreur', 'Impossible de charger les documents');
+      }
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  // Charger les dossiers depuis l'API
+  const fetchFolders = async () => {
+    try {
+      console.log('🔄 Fetching folders...');
+      const response = await FoldersApi.getAll();
+      console.log('📦 API Response:', response);
+
+      if (response.success && response.data) {
+        console.log('✅ Folders from API:', response.data.folders);
+
+        // Mapper les dossiers de l'API au format local
+        const mappedFolders: Folder[] = response.data.folders.map((folder: any) => ({
+          id: folder.id,
+          name: folder.name,
+          parentId: folder.parentId,
+          createdBy: folder.ownerId, // Backend utilise ownerId
+          createdAt: folder.createdAt,
+          permissions: folder.permissions || [], // Utiliser les permissions du backend
+        }));
+
+        console.log('🗂️ Mapped folders:', mappedFolders);
+        setFolders(mappedFolders);
+        console.log('📁 Folders loaded and set in state:', mappedFolders.length);
+      } else {
+        console.warn('⚠️ API returned no data or failed');
+      }
+    } catch (error) {
+      console.error('❌ Error loading folders:', error);
+      // Continuer avec les dossiers mock en cas d'erreur
+      setFolders(initialFolders);
+    }
+  };
+
+  // Charger les membres de l'association
+  const fetchAssociationMembers = async () => {
+    try {
+      const response = await AssociationsApi.getMembers({ limit: 100 });
+
+      if (response.success && response.data) {
+        // Mapper les membres au format User
+        const mappedMembers: User[] = response.data.members.map((member: any) => ({
+          id: member.id,
+          firstname: member.firstname,
+          lastname: member.lastname,
+          email: member.email,
+          role: member.role?.name || 'membre',
+        }));
+
+        setAssociationMembers(mappedMembers);
+        console.log('👥 Association members loaded:', mappedMembers.length);
+      }
+    } catch (error) {
+      console.error('Error loading association members:', error);
+      // Continuer avec les utilisateurs mock en cas d'erreur
+      setAssociationMembers(initialUtilisateurs);
+    }
+  };
+
+  // Charger les documents, dossiers et membres au montage
+  React.useEffect(() => {
+    fetchDocuments();
+    fetchFolders();
+    fetchAssociationMembers();
+  }, []);
+
+  // Fonction helper pour déterminer le type de fichier
+  const getFileType = (fileName: string): 'PDF' | 'DOCX' | 'XLSX' | 'PPTX' | 'OTHER' => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    if (extension === 'pdf') return 'PDF';
+    if (extension === 'docx' || extension === 'doc') return 'DOCX';
+    if (extension === 'xlsx' || extension === 'xls') return 'XLSX';
+    if (extension === 'pptx' || extension === 'ppt') return 'PPTX';
+    return 'OTHER';
+  };
+
+  // Fonction helper pour formater la taille
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  // Check if current user can manage permissions (utilise les vraies données de rôle)
+  const canManagePermissions = currentAuthUser && (
+    currentAuthUser.isSuperAdmin ||
+    currentAuthUser.isAdmin ||
+    currentAuthUser.role.level >= 70 // Niveau encadrant
+  );
 
   // Check if current user is an admin member (can download all documents)
-  const isAdminMember = currentUser && (
-    currentUser.role === 'Admin' ||
-    currentUser.role === 'Président' ||
-    currentUser.role === 'Trésorier'
+  const isAdminMember = currentAuthUser && (
+    currentAuthUser.isSuperAdmin ||
+    currentAuthUser.isAdmin ||
+    currentAuthUser.role.level >= 80 // Niveau admin/président/trésorier
   );
+
+  const handleViewDocument = async (id: number) => {
+    console.log('📄 Viewing document:', id);
+    try {
+      const response = await DocumentsApi.viewDocument(id);
+      console.log('📄 View response:', response);
+
+      if (response.success && response.data?.document) {
+        const doc = response.data.document;
+
+        // Télécharger le fichier avec authentification et créer un blob URL
+        const token = await tokenStorage.getAccessToken();
+        const downloadPath = DocumentsApi.downloadDocument(id);
+
+        console.log('📄 Fetching document from:', downloadPath);
+
+        // Télécharger le fichier avec le token d'authentification
+        const fileResponse = await fetch(downloadPath, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!fileResponse.ok) {
+          throw new Error(`Erreur HTTP: ${fileResponse.status}`);
+        }
+
+        // Récupérer le Content-Type depuis les headers de la réponse
+        const contentType = fileResponse.headers.get('content-type') || doc.mimeType || 'application/octet-stream';
+
+        console.log('📄 Content-Type from response:', contentType);
+        console.log('📄 MimeType from doc:', doc.mimeType);
+
+        // Convertir en blob avec le bon type MIME
+        const arrayBuffer = await fileResponse.arrayBuffer();
+        const blob = new Blob([arrayBuffer], { type: contentType });
+
+        // Créer une URL blob locale
+        const blobUrl = URL.createObjectURL(blob);
+
+        console.log('📄 Opening viewer modal with blob URL:', blobUrl);
+        console.log('📄 Blob type:', blob.type);
+
+        // Ouvrir la modal de visualisation
+        setViewerDocumentUrl(blobUrl);
+        setViewerDocumentName(doc.name || doc.fileName || 'Document');
+        setViewerDocumentMimeType(contentType);
+        setShowViewerModal(true);
+      } else {
+        console.warn('📄 No document in response:', response);
+        if (isWeb) {
+          alert('Impossible de récupérer les informations du document');
+        } else {
+          Alert.alert('Erreur', 'Impossible de récupérer les informations du document');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error viewing document:', error);
+      if (isWeb) {
+        alert(`Erreur lors de l'ouverture du document: ${error}`);
+      } else {
+        Alert.alert('Erreur', 'Impossible d\'ouvrir le document');
+      }
+    }
+  };
+
+  const handleDownloadDocument = async (id: number, name: string) => {
+    console.log('💾 Downloading document:', id, name);
+    try {
+      const downloadUrl = DocumentsApi.downloadDocument(id);
+      console.log('💾 Download URL:', downloadUrl);
+
+      if (isWeb) {
+        // Pour le web, créer un lien temporaire et déclencher le téléchargement
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = name;
+        link.target = '_blank'; // Ouvrir dans un nouvel onglet si le téléchargement échoue
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        console.log('💾 Download triggered');
+      } else {
+        // Pour mobile, utiliser Linking
+        // await Linking.openURL(downloadUrl);
+        Alert.alert('Info', 'Téléchargement en cours...');
+      }
+    } catch (error) {
+      console.error('❌ Error downloading document:', error);
+      if (isWeb) {
+        alert(`Erreur lors du téléchargement du document: ${error}`);
+      } else {
+        Alert.alert('Erreur', 'Impossible de télécharger le document');
+      }
+    }
+  };
 
   const handleDeleteDocument = (id: number) => {
     setDocuments(documents.filter((doc) => doc.id !== id));
@@ -103,39 +354,105 @@ export default function DocumentsScreen() {
     handleClosePermissionsModal();
   };
 
-  const handleAddDocument = (newDoc: Omit<Document, 'id' | 'date'> & { size?: number }) => {
-    // Formater la taille du fichier
-    const formatFileSize = (bytes?: number): string => {
-      if (!bytes) return '0 KB';
-      if (bytes < 1024) return bytes + ' B';
-      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    };
+  const handleAddDocument = async (newDoc: Omit<Document, 'id' | 'date'> & { size?: number; uri?: string; mimeType?: string; visibility?: 'association' | 'personal' }) => {
+    try {
+      setUploadingDocument(true);
 
-    const document: Document = {
-      id: documents.length + 1,
-      nameDoc: newDoc.nameDoc,
-      folderId: newDoc.folderId,
-      type: newDoc.type,
-      length: formatFileSize(newDoc.size),
-      date: new Date().toISOString().split('T')[0],
-      uploadedBy: currentUserId,
-      uri: newDoc.uri,
-      mimeType: newDoc.mimeType,
-    };
-    setDocuments([...documents, document]);
+      // Convertir l'URI en File pour l'upload (en gardant le nom et le type MIME)
+      let file: File;
+
+      if (newDoc.uri) {
+        // Pour le web, récupérer le fichier depuis l'URI
+        const response = await fetch(newDoc.uri);
+        const blob = await response.blob();
+
+        // Créer un File avec le nom et le type MIME originaux
+        file = new File([blob], newDoc.nameDoc, {
+          type: newDoc.mimeType || blob.type
+        });
+      } else {
+        throw new Error('Aucun fichier sélectionné');
+      }
+
+      // Mapper la visibilité du frontend vers le backend
+      const backendVisibility = newDoc.visibility === 'personal' ? 'private' : 'members';
+
+      // Uploader le document via l'API
+      const uploadResponse = await DocumentsApi.upload({
+        name: newDoc.nameDoc,
+        file: file,
+        folderId: newDoc.folderId,
+        visibility: backendVisibility,
+        category: 'other', // Catégorie par défaut
+      });
+
+      if (uploadResponse.success && uploadResponse.data) {
+        // Recharger les documents depuis la BDD pour afficher les données à jour
+        await fetchDocuments();
+
+        // Afficher un message de succès
+        if (isWeb) {
+          alert('Document ajouté avec succès !');
+        } else {
+          Alert.alert('Succès', 'Document ajouté avec succès !');
+        }
+      }
+    } catch (error) {
+      console.error('Error uploading document:', error);
+
+      if (isWeb) {
+        alert('Erreur lors de l\'ajout du document');
+      } else {
+        Alert.alert('Erreur', 'Impossible d\'ajouter le document');
+      }
+    } finally {
+      setUploadingDocument(false);
+    }
   };
 
-  const handleCreateFolder = (newFolder: Omit<Folder, 'id' | 'createdAt'>) => {
-    const folder: Folder = {
-      id: folders.length + 1,
-      name: newFolder.name,
-      parentId: newFolder.parentId,
-      createdBy: newFolder.createdBy,
-      createdAt: new Date().toISOString().split('T')[0],
-      permissions: newFolder.permissions,
-    };
-    setFolders([...folders, folder]);
+  const handleCreateFolder = async (newFolder: Omit<Folder, 'id' | 'createdAt'>) => {
+    try {
+      // Déterminer la visibilité selon le rôle de l'utilisateur
+      let visibility: 'private' | 'members' | 'staff' | 'public' = 'members';
+
+      // Super admin peut créer des dossiers pour le staff
+      if (currentAuthUser?.role.name === 'super_admin') {
+        visibility = 'staff';
+      }
+      // Les autres utilisateurs créent des dossiers pour tous les membres
+      else {
+        visibility = 'members';
+      }
+
+      // Créer le dossier via l'API
+      const response = await FoldersApi.create({
+        name: newFolder.name,
+        parentId: newFolder.parentId,
+        visibility,
+        allowUpload: true,
+        allowDownload: true,
+        allowDelete: false,
+      });
+
+      if (response.success && response.data) {
+        // Recharger les dossiers depuis la BDD
+        await fetchFolders();
+
+        if (isWeb) {
+          alert('Dossier créé avec succès !');
+        } else {
+          Alert.alert('Succès', 'Dossier créé avec succès !');
+        }
+      }
+    } catch (error) {
+      console.error('Error creating folder:', error);
+
+      if (isWeb) {
+        alert('Erreur lors de la création du dossier');
+      } else {
+        Alert.alert('Erreur', 'Impossible de créer le dossier');
+      }
+    }
   };
 
   const handleDeleteFolder = (id: number) => {
@@ -190,17 +507,11 @@ export default function DocumentsScreen() {
     // await downloadDocumentsAsZip(documentsToDownload, 'association-documents.zip');
   };
 
-  // Filtrer les dossiers accessibles dans le dossier actuel
-  const accessibleFolders = folders.filter((folder) => {
-    const isInCurrentFolder = folder.parentId === currentFolderId;
-    const hasAccess = canUserAccessFolder(currentUserId, folder, 'view');
-    return isInCurrentFolder && hasAccess;
-  });
+  // Pour le moment, on affiche tous les documents sans système de dossiers
+  const accessibleFolders: Folder[] = [];
 
-  // Filtrer les documents dans le dossier actuel
-  const currentDocuments = currentFolderId
-    ? documents.filter((doc) => doc.folderId === currentFolderId)
-    : [];
+  // Filtrer les documents selon le dossier actuel
+  const currentDocuments = documents.filter((doc) => doc.folderId === currentFolderId);
 
   const getTypeColor = (type: string) => {
     const colors: Record<string, string> = {
@@ -279,23 +590,55 @@ export default function DocumentsScreen() {
           </View>
         </View>
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => {
+              console.log('👁️ View button clicked for document:', {
+                id: item.id,
+                name: item.nameDoc,
+                type: item.type,
+              });
+              handleViewDocument(item.id);
+            }}
+          >
             <Eye color="#64748b" size={18} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => {
+              console.log('⬇️ Download button clicked for document:', {
+                id: item.id,
+                name: item.nameDoc,
+                type: item.type,
+              });
+              handleDownloadDocument(item.id, item.nameDoc);
+            }}
+          >
             <Download color="#64748b" size={18} />
           </TouchableOpacity>
           {showPermissionsButton && (
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => handleOpenPermissionsModal(item)}
+              onPress={() => {
+                console.log('🔒 Permissions button clicked for document:', {
+                  id: item.id,
+                  name: item.nameDoc,
+                });
+                handleOpenPermissionsModal(item);
+              }}
             >
               <Lock color="#3b82f6" size={18} />
             </TouchableOpacity>
           )}
           <TouchableOpacity
             style={styles.actionButton}
-            onPress={() => handleDeleteDocument(item.id)}
+            onPress={() => {
+              console.log('🗑️ Delete button clicked for document:', {
+                id: item.id,
+                name: item.nameDoc,
+              });
+              handleDeleteDocument(item.id);
+            }}
           >
             <Trash2 color="#ef4444" size={18} />
           </TouchableOpacity>
@@ -308,28 +651,45 @@ export default function DocumentsScreen() {
     ? canUserAccessFolder(currentUserId, currentFolder, 'add')
     : false;
 
+  // Afficher un loader si l'utilisateur est en cours de chargement
+  if (loadingUser) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#2563eb" />
+        <Text style={{ marginTop: 16, color: '#64748b' }}>Chargement...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.card}>
           <View style={styles.header}>
             <View style={styles.headerLeft}>
-              {currentFolder && (
-                <TouchableOpacity onPress={navigateBack} style={styles.backButton}>
-                  <ChevronRight
-                    color="#2563eb"
-                    size={20}
-                    style={{ transform: [{ rotate: '180deg' }] }}
-                  />
-                </TouchableOpacity>
-              )}
-              <View>
-                <Text style={styles.title}>
-                  {currentFolder ? currentFolder.name : 'Gestion des Documents'}
-                </Text>
+              <View style={styles.headerTitleSection}>
+                <Text style={styles.title}>Gestion des Documents</Text>
+
+                {/* Breadcrumb / Fil d'Ariane */}
+                <View style={styles.breadcrumb}>
+                  <TouchableOpacity onPress={() => setCurrentFolderId(null)}>
+                    <Text style={[styles.breadcrumbItem, !currentFolder && styles.breadcrumbActive]}>
+                      📁 Racine
+                    </Text>
+                  </TouchableOpacity>
+                  {currentFolder && (
+                    <>
+                      <Text style={styles.breadcrumbSeparator}>/</Text>
+                      <Text style={[styles.breadcrumbItem, styles.breadcrumbActive]}>
+                        {currentFolder.name}
+                      </Text>
+                    </>
+                  )}
+                </View>
+
                 <Text style={styles.subtitle}>
-                  {accessibleFolders.length} dossier{accessibleFolders.length !== 1 ? 's' : ''} •{' '}
                   {currentDocuments.length} document{currentDocuments.length !== 1 ? 's' : ''}
+                  {currentAuthUser && ` • ${currentAuthUser.role.displayName}`}
                 </Text>
               </View>
             </View>
@@ -345,53 +705,62 @@ export default function DocumentsScreen() {
                   </Text>
                 </TouchableOpacity>
               )}
-              {currentFolderId && canAddInCurrentFolder && (
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={() => setShowAddModal(true)}
-                >
-                  <Plus color="#fff" size={20} />
-                  <Text style={styles.addButtonText}>Document</Text>
-                </TouchableOpacity>
-              )}
               <TouchableOpacity
-                style={[styles.addButton, styles.createFolderButton]}
+                style={styles.createFolderButton}
                 onPress={() => setShowCreateFolderModal(true)}
               >
-                <FolderIcon color="#fff" size={20} />
-                <Text style={styles.addButtonText}>Dossier</Text>
+                <FolderIcon color="#2563eb" size={20} />
+                <Text style={styles.createFolderButtonText}>Nouveau dossier</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => setShowAddModal(true)}
+              >
+                <Plus color="#fff" size={20} />
+                <Text style={styles.addButtonText}>Ajouter un document</Text>
               </TouchableOpacity>
             </View>
           </View>
 
           <View style={styles.listContent}>
-            {accessibleFolders.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Dossiers</Text>
-                {accessibleFolders.map((folder) => (
-                  <View key={folder.id}>{renderFolder({ item: folder })}</View>
-                ))}
-              </View>
-            )}
-
-            {currentDocuments.length > 0 && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Documents</Text>
-                {currentDocuments.map((doc) => (
-                  <View key={doc.id}>{renderDocument({ item: doc })}</View>
-                ))}
-              </View>
-            )}
-
-            {accessibleFolders.length === 0 && currentDocuments.length === 0 && (
+            {loadingDocuments ? (
               <View style={styles.emptyState}>
-                <FolderIcon color="#cbd5e1" size={64} />
-                <Text style={styles.emptyStateText}>
-                  {currentFolder
-                    ? 'Ce dossier est vide'
-                    : 'Aucun dossier accessible'}
-                </Text>
+                <ActivityIndicator size="large" color="#2563eb" />
+                <Text style={styles.emptyStateText}>Chargement des documents...</Text>
               </View>
+            ) : (
+              <>
+                {/* Section des dossiers */}
+                {(() => {
+                  const visibleFolders = folders.filter((f) => f.parentId === currentFolderId);
+                  console.log('📂 Visible folders (parentId === ' + currentFolderId + '):', visibleFolders);
+                  console.log('📊 All folders:', folders);
+                  console.log('🔍 Current folder ID:', currentFolderId);
+                  return visibleFolders.length > 0 ? (
+                    <View style={styles.section}>
+                      <Text style={styles.sectionTitle}>Dossiers</Text>
+                      {visibleFolders.map((folder) => (
+                        <View key={folder.id}>{renderFolder({ item: folder })}</View>
+                      ))}
+                    </View>
+                  ) : null;
+                })()}
+
+                {/* Section des documents */}
+                {currentDocuments.length > 0 ? (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Documents</Text>
+                    {currentDocuments.map((doc) => (
+                      <View key={doc.id}>{renderDocument({ item: doc })}</View>
+                    ))}
+                  </View>
+                ) : folders.filter((f) => f.parentId === currentFolderId).length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <FolderIcon color="#cbd5e1" size={64} />
+                    <Text style={styles.emptyStateText}>Aucun document ni dossier</Text>
+                  </View>
+                ) : null}
+              </>
             )}
           </View>
         </View>
@@ -410,10 +779,42 @@ export default function DocumentsScreen() {
         visible={showCreateFolderModal}
         onClose={() => setShowCreateFolderModal(false)}
         onCreate={handleCreateFolder}
-        users={initialUtilisateurs}
+        users={associationMembers.length > 0 ? associationMembers : initialUtilisateurs}
         currentUserId={currentUserId}
         parentFolder={currentFolder}
       />
+
+      {/* Document Viewer Modal */}
+      <DocumentViewerModal
+        visible={showViewerModal}
+        onClose={() => {
+          // Libérer l'URL blob pour éviter les fuites mémoire
+          if (viewerDocumentUrl && viewerDocumentUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(viewerDocumentUrl);
+          }
+          setShowViewerModal(false);
+          setViewerDocumentUrl(null);
+          setViewerDocumentName('');
+          setViewerDocumentMimeType('');
+        }}
+        documentUrl={viewerDocumentUrl}
+        documentName={viewerDocumentName}
+        mimeType={viewerDocumentMimeType}
+      />
+
+      {/* Loading Modal for Upload */}
+      <Modal
+        visible={uploadingDocument}
+        transparent
+        animationType="fade"
+      >
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#2563eb" />
+            <Text style={styles.loadingText}>Upload du document en cours...</Text>
+          </View>
+        </View>
+      </Modal>
 
       {/* Permissions Modal */}
       <Modal
@@ -507,6 +908,29 @@ const styles = StyleSheet.create({
     gap: 12,
     flex: 1,
   },
+  headerTitleSection: {
+    flex: 1,
+  },
+  breadcrumb: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  breadcrumbItem: {
+    fontSize: 14,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  breadcrumbActive: {
+    color: '#2563eb',
+    fontWeight: '600',
+  },
+  breadcrumbSeparator: {
+    fontSize: 14,
+    color: '#cbd5e1',
+    marginHorizontal: 8,
+  },
   headerActions: {
     flexDirection: 'row',
     gap: 8,
@@ -539,7 +963,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   createFolderButton: {
-    backgroundColor: '#10b981',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 8,
+    borderWidth: 2,
+    borderColor: '#2563eb',
+  },
+  createFolderButtonText: {
+    color: '#2563eb',
+    fontSize: 14,
+    fontWeight: '600',
   },
   addButtonText: {
     color: '#fff',
@@ -796,5 +1233,24 @@ const styles = StyleSheet.create({
   },
   footerButton: {
     flex: 1,
+  },
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 30,
+    alignItems: 'center',
+    gap: 16,
+    minWidth: 200,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#1e293b',
+    fontWeight: '500',
   },
 });

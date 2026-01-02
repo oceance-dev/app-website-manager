@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  StyleSheet,
 } from 'react-native';
 import { X, Upload, FileText } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
@@ -29,6 +30,7 @@ interface AddDocumentModalProps {
     nameDoc: string;
     folderId: number;
     type: 'PDF' | 'DOCX' | 'XLSX' | 'PPTX' | 'OTHER';
+    visibility: 'association' | 'personal';
     uri?: string;
     mimeType?: string;
     size?: number;
@@ -48,6 +50,7 @@ export default function AddDocumentModal({
 }: AddDocumentModalProps) {
   const [selectedFile, setSelectedFile] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(currentFolderId);
+  const [visibility, setVisibility] = useState<'association' | 'personal'>('association');
 
   // Mettre à jour le dossier sélectionné quand le currentFolderId change
   useEffect(() => {
@@ -105,6 +108,7 @@ export default function AddDocumentModal({
         nameDoc: selectedFile.name,
         folderId: selectedFolderId,
         type: fileType,
+        visibility,
         uri: selectedFile.uri,
         mimeType: selectedFile.mimeType,
         size: selectedFile.size,
@@ -112,6 +116,7 @@ export default function AddDocumentModal({
 
       setSelectedFile(null);
       setSelectedFolderId(currentFolderId);
+      setVisibility('association');
       onClose();
     }
   };
@@ -119,6 +124,7 @@ export default function AddDocumentModal({
   const handleClose = () => {
     setSelectedFile(null);
     setSelectedFolderId(currentFolderId);
+    setVisibility('association');
     onClose();
   };
 
@@ -129,43 +135,97 @@ export default function AddDocumentModal({
       animationType="slide"
       onRequestClose={handleClose}
     >
-      <View className="flex-1 bg-black/50 justify-center items-center p-5">
-        <View className="bg-white rounded-2xl w-full max-w-lg" style={{ maxHeight: '80%' }}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
           {/* Header */}
-          <View className="flex-row justify-between items-center p-5 border-b border-slate-200">
-            <Text className="text-xl font-bold text-slate-800">Ajouter un document</Text>
-            <TouchableOpacity onPress={handleClose} className="p-1">
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Ajouter un document</Text>
+            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
               <X color="#64748b" size={24} />
             </TouchableOpacity>
           </View>
 
           {/* Content */}
-          <ScrollView className="p-5">
-            <View className="mb-5">
-              <Text className="text-sm font-semibold text-slate-700 mb-2">Sélectionner un fichier</Text>
+          <ScrollView style={styles.content}>
+            <View style={styles.section}>
+              <Text style={styles.label}>Mode de partage</Text>
+              <View style={styles.visibilityContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.visibilityButton,
+                    visibility === 'association' && styles.visibilityButtonSelected
+                  ]}
+                  onPress={() => setVisibility('association')}
+                >
+                  <Text
+                    style={[
+                      styles.visibilityButtonText,
+                      visibility === 'association' && styles.visibilityButtonTextSelected
+                    ]}
+                  >
+                    Association
+                  </Text>
+                  <Text
+                    style={[
+                      styles.visibilityDescription,
+                      visibility === 'association' && styles.visibilityDescriptionSelected
+                    ]}
+                  >
+                    Partagé avec l'association
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.visibilityButton,
+                    visibility === 'personal' && styles.visibilityButtonSelected
+                  ]}
+                  onPress={() => setVisibility('personal')}
+                >
+                  <Text
+                    style={[
+                      styles.visibilityButtonText,
+                      visibility === 'personal' && styles.visibilityButtonTextSelected
+                    ]}
+                  >
+                    Personnel
+                  </Text>
+                  <Text
+                    style={[
+                      styles.visibilityDescription,
+                      visibility === 'personal' && styles.visibilityDescriptionSelected
+                    ]}
+                  >
+                    Visible uniquement par vous
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.label}>Sélectionner un fichier</Text>
               <TouchableOpacity
-                className="flex-row items-center justify-center gap-3 border-2 border-dashed border-primary rounded-lg p-6 bg-blue-50"
+                style={styles.uploadButton}
                 onPress={pickDocument}
               >
                 <Upload color="#2563eb" size={24} />
-                <Text className="text-base font-semibold text-primary">
+                <Text style={styles.uploadButtonText}>
                   {selectedFile ? 'Changer de fichier' : 'Choisir un fichier'}
                 </Text>
               </TouchableOpacity>
 
               {selectedFile && (
-                <View className="flex-row items-center gap-3 mt-4 p-3 bg-slate-100 rounded-lg">
+                <View style={styles.selectedFileContainer}>
                   <FileText color="#3b82f6" size={32} />
-                  <View className="flex-1">
-                    <Text className="text-sm font-semibold text-slate-800 mb-1">
+                  <View style={styles.selectedFileInfo}>
+                    <Text style={styles.selectedFileName}>
                       {selectedFile.name}
                     </Text>
-                    <Text className="text-xs text-slate-600">
+                    <Text style={styles.selectedFileDetails}>
                       {formatFileSize(selectedFile.size)} • {getFileType(selectedFile.name, selectedFile.mimeType)}
                     </Text>
                   </View>
                   <TouchableOpacity
-                    className="w-8 h-8 rounded-lg bg-red-100 items-center justify-center"
+                    style={styles.removeFileButton}
                     onPress={() => setSelectedFile(null)}
                   >
                     <X color="#ef4444" size={20} />
@@ -174,26 +234,24 @@ export default function AddDocumentModal({
               )}
             </View>
 
-            <View className="mb-5">
-              <Text className="text-sm font-semibold text-slate-700 mb-2">Dossier de destination</Text>
+            <View style={styles.section}>
+              <Text style={styles.label}>Dossier de destination</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View className="flex-row gap-2 py-1">
+                <View style={styles.foldersRow}>
                   {accessibleFolders.map((folder) => (
                     <TouchableOpacity
                       key={folder.id}
-                      className={`px-4 py-2.5 rounded-lg border ${
-                        selectedFolderId === folder.id
-                          ? 'bg-green-500 border-green-500'
-                          : 'bg-white border-slate-300'
-                      }`}
+                      style={[
+                        styles.folderButton,
+                        selectedFolderId === folder.id && styles.folderButtonSelected
+                      ]}
                       onPress={() => setSelectedFolderId(folder.id)}
                     >
                       <Text
-                        className={`text-sm font-semibold ${
-                          selectedFolderId === folder.id
-                            ? 'text-white'
-                            : 'text-slate-600'
-                        }`}
+                        style={[
+                          styles.folderButtonText,
+                          selectedFolderId === folder.id && styles.folderButtonTextSelected
+                        ]}
                       >
                         {folder.name}
                       </Text>
@@ -202,7 +260,7 @@ export default function AddDocumentModal({
                 </View>
               </ScrollView>
               {accessibleFolders.length === 0 && (
-                <Text className="text-xs text-red-500 mt-2 italic">
+                <Text style={styles.errorText}>
                   Aucun dossier accessible pour ajouter des documents
                 </Text>
               )}
@@ -210,7 +268,7 @@ export default function AddDocumentModal({
           </ScrollView>
 
           {/* Footer */}
-          <View className="flex-row p-5 gap-3 border-t border-slate-200">
+          <View style={styles.footer}>
             <Button
               variant="secondary"
               onPress={handleClose}
@@ -232,3 +290,167 @@ export default function AddDocumentModal({
     </Modal>
   );
 }
+
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '80%',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1e293b',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  content: {
+    padding: 20,
+  },
+  section: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 8,
+  },
+  visibilityContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  visibilityButton: {
+    flex: 1,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#cbd5e1',
+    backgroundColor: 'white',
+    alignItems: 'center',
+  },
+  visibilityButtonSelected: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#2563eb',
+  },
+  visibilityButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 4,
+  },
+  visibilityButtonTextSelected: {
+    color: '#2563eb',
+  },
+  visibilityDescription: {
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'center',
+  },
+  visibilityDescriptionSelected: {
+    color: '#3b82f6',
+  },
+  uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#2563eb',
+    borderRadius: 8,
+    padding: 24,
+    backgroundColor: '#eff6ff',
+  },
+  uploadButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2563eb',
+  },
+  selectedFileContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+  },
+  selectedFileInfo: {
+    flex: 1,
+  },
+  selectedFileName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b',
+    marginBottom: 4,
+  },
+  selectedFileDetails: {
+    fontSize: 12,
+    color: '#475569',
+  },
+  removeFileButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#fee2e2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  foldersRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  folderButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    backgroundColor: 'white',
+  },
+  folderButtonSelected: {
+    backgroundColor: '#22c55e',
+    borderColor: '#22c55e',
+  },
+  folderButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  folderButtonTextSelected: {
+    color: 'white',
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#ef4444',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  footer: {
+    flexDirection: 'row',
+    padding: 20,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+});

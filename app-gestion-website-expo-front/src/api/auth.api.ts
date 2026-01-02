@@ -1,4 +1,6 @@
+import { api } from './apiRequest';
 import { API_CONFIG, ApiError, ApiResponse, handleApiResponse, fetchWithTimeout } from './config';
+import { UrlApi } from './url.api';
 
 // Types pour l'authentification
 export interface RegisterAssociationData {
@@ -39,13 +41,25 @@ export interface AuthTokens {
   };
 }
 
+export interface AuthUserRole {
+  id: number;
+  name: string;
+  displayName: string;
+  level: number;
+}
+
 export interface AuthUser {
   id: number;
   email: string;
-  firstname: string;
-  lastname: string;
-  role: string;
+  firstname?: string;
+  lastname?: string;
+  firstName?: string;
+  lastName?: string;
+  role: AuthUserRole;
   isActive: boolean;
+  isSuperAdmin?: boolean;
+  isAdmin?: boolean;
+  phone?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -104,8 +118,9 @@ export const AuthApi = {
   /**
    * Inscription d'une nouvelle association
    */
+  
   async registerAssociation(data: RegisterAssociationData): Promise<ApiResponse<RegisterAssociationResponse>> {
-    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/auth/registerAssociation`, {
+    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/auth/registerAssociation`, {
       method: 'POST',
       headers: API_CONFIG.DEFAULT_HEADERS,
       body: JSON.stringify(data),
@@ -118,7 +133,7 @@ export const AuthApi = {
    * Inscription d'un membre d'association
    */
   async registerMember(data: RegisterMemberData): Promise<ApiResponse<RegisterMemberResponse>> {
-    const url = `${API_CONFIG.BASE_URL}/v1/auth/registerMemberAssociation`;
+    const url = `${API_CONFIG.BASE_URL}/auth/registerMemberAssociation`;
     console.log('🌐 API Call URL:', url);
     console.log('📦 Request body:', JSON.stringify(data, null, 2));
 
@@ -137,57 +152,32 @@ export const AuthApi = {
   /**
    * Connexion
    */
-  async login(data: LoginData): Promise<ApiResponse<LoginResponse>> {
-    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/auth/login`, {
-      method: 'POST',
-      headers: API_CONFIG.DEFAULT_HEADERS,
-      body: JSON.stringify(data),
-    });
-
-    return handleApiResponse<LoginResponse>(response);
+  async login(loginData: LoginData): Promise<ApiResponse<LoginResponse>> {
+    const data = await api.post<LoginResponse>(UrlApi.authApi.login, loginData);
+    return { success: true, data };
   },
 
   /**
    * Rafraîchir les tokens
    */
   async refreshToken(refreshToken: string): Promise<ApiResponse<LoginResponse>> {
-    const response = await fetchWithTimeout(`${API_CONFIG.BASE_URL}/v1/auth/refresh`, {
-      method: 'POST',
-      headers: API_CONFIG.DEFAULT_HEADERS,
-      body: JSON.stringify({ refreshToken }),
-    });
-
-    return handleApiResponse<LoginResponse>(response);
+    const data = await api.post<LoginResponse>(UrlApi.authApi.refresh, { refreshToken });
+    return { success: true, data };
   },
 
   /**
    * Récupérer l'utilisateur connecté
    */
-  async getMe(accessToken: string): Promise<ApiResponse<{ user: AuthUser; association: AuthAssociation | null }>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/auth/me`, {
-      method: 'GET',
-      headers: {
-        ...API_CONFIG.DEFAULT_HEADERS,
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-
-    return handleApiResponse<{ user: AuthUser; association: AuthAssociation | null }>(response);
+  async getMe(): Promise<ApiResponse<{ user: AuthUser; association: AuthAssociation | null }>> {
+    const data = await api.get<{ user: AuthUser; association: AuthAssociation | null }>(UrlApi.authApi.me);
+    return { success: true, data };
   },
 
   /**
    * Déconnexion
    */
-  async logout(accessToken: string, refreshToken?: string): Promise<ApiResponse<void>> {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/auth/logout`, {
-      method: 'POST',
-      headers: {
-        ...API_CONFIG.DEFAULT_HEADERS,
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ refreshToken }),
-    });
-
-    return handleApiResponse<void>(response);
+  async logout(refreshToken: string): Promise<ApiResponse<void>> {
+    const data = await api.post<void>(UrlApi.authApi.logout, { refreshToken });
+    return { success: true, data };
   },
 };

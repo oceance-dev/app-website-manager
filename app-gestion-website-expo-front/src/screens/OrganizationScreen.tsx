@@ -10,14 +10,17 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
-import { Building2, MapPin, Mail, Phone, Edit2, Save, X, UserPlus, Users, GraduationCap, FileCheck, Eye, Download, Calendar, User, Clock, CalendarDays, Edit3, Trash2, CheckCircle2, Loader2, FolderDown } from 'lucide-react-native';
+import { Building2, MapPin, Mail, Phone, Edit2, Save, X, UserPlus, Users, GraduationCap, FileCheck, Eye, Download, Calendar, User, Clock, CalendarDays, Edit3, Trash2, CheckCircle2, Loader2, FolderDown, UserCog } from 'lucide-react-native';
 import { getDepartmentFromPostalCode, isValidPostalCode, Department } from '../utils/department';
 import { isWeb } from '../utils/responsive';
 import { initialUtilisateurs } from '../data/mockData';
 import type { User as UserType } from '../types';
-import { CadetsApi, CandidatsApi, ApiError, mapCadetsArrayToUsers } from '../api';
+import { CadetsApi, CandidatsApi, ApiError, mapCadetsArrayToUsers, AssociationsApi, AuthApi } from '../api';
+import { UsersApi, UserResponse } from '../api/users.api';
+import { RolesApi, Role } from '../api/roles.api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-type TabType = 'administration' | 'requests' | 'trainers' | 'cadets';
+type TabType = 'administration' | 'requests' | 'members' | 'all-members' | 'trainers' | 'cadets';
 
 interface RegistrationDocument {
   id: number;
@@ -68,6 +71,20 @@ interface OrganizationInfo {
   phone: string;
 }
 
+interface Member {
+  id: number;
+  firstname: string;
+  lastname: string;
+  email: string;
+  phone: string;
+  city_code: string;
+  dateOfBirth: string;
+}
+
+interface AllMembersResponse {
+  members: Member[];
+}
+
 export default function OrganizationScreen() {
   const [activeTab, setActiveTab] = useState<TabType>('administration');
   const [isEditing, setIsEditing] = useState(false);
@@ -84,18 +101,38 @@ export default function OrganizationScreen() {
   const [selectedCadet, setSelectedCadet] = useState<UserType | null>(null);
   const [cadetRole, setCadetRole] = useState<string>('Cadet');
 
+  // États pour les membres en attente
+  const [pendingMembers, setPendingMembers] = useState<UserResponse[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
+
+  // États pour tous les membres actifs
+  const [allMembers, setAllMembers] = useState<UserResponse[]>([]);
+  const [loadingAllMembers, setLoadingAllMembers] = useState(false);
+
+  // États pour la sélection de rôle lors de l'approbation
+  const [showRoleSelectionModal, setShowRoleSelectionModal] = useState(false);
+  const [selectedMemberForApproval, setSelectedMemberForApproval] = useState<{ id: number; name: string } | null>(null);
+  const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
+  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
+  const [loadingRoles, setLoadingRoles] = useState(false);
+
   const [orgInfo, setOrgInfo] = useState<OrganizationInfo>({
-    name: 'Cadet de la Somme',
-    address: '123 rue de la République',
-    postalCode: '80000',
-    city: 'Amiens',
-    email: 'contact@cadet-somme.fr',
-    phone: '+33 3 22 00 00 00',
+    name: '',
+    address: '',
+    postalCode: '',
+    city: '',
+    email: '',
+    phone: '',
   });
   const [editedInfo, setEditedInfo] = useState<OrganizationInfo>(orgInfo);
-  const [departmentInfo, setDepartmentInfo] = useState<Department | null>(
-    getDepartmentFromPostalCode('80000')
-  );
+  const [departmentInfo, setDepartmentInfo] = useState<Department | null>(null);
+
+  // États pour les statistiques
+  const [stats, setStats] = useState({
+    activeUsers: 0,
+    documentsCount: 0,
+    foldersCount: 0,
+  });
 
   // Fonction helper pour générer les documents requis d'un candidat
   const generateCandidatDocuments = (candidatId: number): CandidatDocument[] => {
@@ -202,10 +239,263 @@ export default function OrganizationScreen() {
 
   // Charger les demandes d'inscription quand l'onglet est actif
   useEffect(() => {
+    if (activeTab === 'administration') {
+      fetchOrganizationInfo();
+      fetchStats();
+    }
     if (activeTab === 'requests') {
       fetchRequests();
     }
+    if (activeTab === 'members') {
+      fetchPendingMembers();
+    }
+    if (activeTab === 'all-members') {
+      fetchAllMembers();
+    }
   }, [activeTab]);
+
+
+  // Fonction pour charger les informations de l'association
+  const fetchOrganizationInfo = async () => {
+    try {
+      console.log('🔍 fetchOrganizationInfo: Starting...');
+      const accessToken = await AsyncStorage.getItem('accessToken');
+
+      if (!accessToken) {
+        console.log('❌ No access token');
+        return;
+      }
+
+      // Récupérer les infos de l'utilisateur connecté
+      const meResponse = await AuthApi.getMe(accessToken);
+      console.log('👤 Me Response:', meResponse);
+
+      if (!meResponse.success || !meResponse.data) {
+        console.log('❌ Failed to get user info');
+        return;
+      }
+
+      const user = meResponse.data.user;
+      const associationId = user.associationId;
+      console.log('🏢 Association ID:', associationId);
+
+      if (!associationId) {
+        console.log('❌ No associationId found');
+        return;
+      }
+
+      console.log('📡 Calling AssociationsApi.getById with ID:', associationId);
+      const response = await AssociationsApi.getById(associationId);
+      console.log('📥 API Response:', response);
+
+      if (response.success && response.data) {
+        const assoc = response.data.association;
+        console.log('✅ Association data:', assoc);
+
+        const newOrgInfo: OrganizationInfo = {
+          name: assoc.name || '',
+          address: assoc.address || '',
+          postalCode: assoc.postalCode || '',
+          city: assoc.city || '',
+          email: assoc.email || '',
+          phone: assoc.phone || '',
+        };
+        console.log('📝 Setting orgInfo:', newOrgInfo);
+        setOrgInfo(newOrgInfo);
+        setEditedInfo(newOrgInfo);
+
+        // Mettre à jour les infos du département
+        if (assoc.postalCode) {
+          const dept = getDepartmentFromPostalCode(assoc.postalCode);
+          setDepartmentInfo(dept);
+        }
+      } else {
+        console.log('❌ Response not successful or no data');
+      }
+    } catch (error) {
+      console.error('❌ Error loading organization info:', error);
+    }
+  };
+
+  // Fonction pour charger les statistiques
+  const fetchStats = async () => {
+    try {
+      const response = await AssociationsApi.getMyStats();
+      if (response.success && response.data) {
+        setStats({
+          activeUsers: response.data.stats.activeUsers,
+          documentsCount: response.data.stats.documentsCount,
+          foldersCount: response.data.stats.foldersCount,
+        });
+      }
+    } catch (error) {
+      console.error('Error loading stats:', error);
+    }
+  };
+
+  // Fonction pour charger les membres en attente
+  const fetchPendingMembers = async () => {
+    try {
+      setLoadingMembers(true);
+      const accessToken = await AsyncStorage.getItem('accessToken');
+      if (!accessToken) return;
+
+      const response = await AssociationsApi.getMembersPending({isActive: false});
+      if (response.success && response.data) {
+        setPendingMembers(response.data.members);
+      }
+    } catch (error) {
+      console.error('Error loading pending members:', error);
+      Alert.alert('Erreur', 'Impossible de charger les membres en attente');
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
+
+  // Fonction pour charger tous les membres actifs
+  const fetchAllMembers = async () => {
+    try {
+      setLoadingAllMembers(true);
+      const response = await AssociationsApi.getMembers({ isActive: true });
+
+      if (response.success && response.data) {
+        setAllMembers(response.data.members);
+      }
+    } catch (error) {
+      console.error('Error loading all members:', error);
+      if (isWeb) {
+        alert(`Erreur: ${error instanceof Error ? error.message : 'Impossible de charger les membres'}`);
+      } else {
+        Alert.alert('Erreur', 'Impossible de charger les membres');
+      }
+    } finally {
+      setLoadingAllMembers(false);
+    }
+  };
+
+  // Fonction pour charger les rôles assignables
+  const fetchAssignableRoles = async () => {
+    try {
+      setLoadingRoles(true);
+      const accessToken = await AsyncStorage.getItem('accessToken');
+      if (!accessToken) return;
+
+      const response = await RolesApi.getAssignable(accessToken);
+      if (response.success && response.data) {
+        setAvailableRoles(response.data.roles);
+      }
+    } catch (error) {
+      console.error('Error loading roles:', error);
+      if (isWeb) {
+        alert('Erreur: Impossible de charger les rôles disponibles');
+      } else {
+        Alert.alert('Erreur', 'Impossible de charger les rôles disponibles');
+      }
+    } finally {
+      setLoadingRoles(false);
+    }
+  };
+
+  // Fonction pour ouvrir le modal de sélection de rôle
+  const openRoleSelectionModal = async (userId: number, userName: string) => {
+    setSelectedMemberForApproval({ id: userId, name: userName });
+    await fetchAssignableRoles();
+    setShowRoleSelectionModal(true);
+  };
+
+  // Fonction pour confirmer l'approbation avec le rôle sélectionné
+  const confirmApproveMember = async () => {
+    if (!selectedMemberForApproval || !selectedRoleId) {
+      if (isWeb) {
+        alert('Erreur: Veuillez sélectionner un rôle');
+      } else {
+        Alert.alert('Erreur', 'Veuillez sélectionner un rôle');
+      }
+      return;
+    }
+
+    try {
+      const response = await AssociationsApi.approveMember(selectedMemberForApproval.id, selectedRoleId);
+
+      if (response.success) {
+        if (isWeb) {
+          alert('Succès: Membre approuvé avec succès');
+        } else {
+          Alert.alert('Succès', 'Membre approuvé avec succès');
+        }
+        fetchPendingMembers(); // Recharger la liste
+        setShowRoleSelectionModal(false);
+        setSelectedMemberForApproval(null);
+        setSelectedRoleId(null);
+      } else {
+        if (isWeb) {
+          alert('Erreur: ' + (response.message || 'Échec de l\'approbation'));
+        } else {
+          Alert.alert('Erreur', response.message || 'Échec de l\'approbation');
+        }
+      }
+    } catch (error: any) {
+      console.error('Error in confirmApproveMember:', error);
+      if (isWeb) {
+        alert('Erreur: ' + (error.message || 'Impossible d\'approuver le membre'));
+      } else {
+        Alert.alert('Erreur', error.message || 'Impossible d\'approuver le membre');
+      }
+    }
+  };
+
+  // Fonction pour approuver un membre - ouvre le modal de sélection de rôle
+  const handleApproveMember = async (userId: number, userName: string) => {
+    openRoleSelectionModal(userId, userName);
+  };
+
+  // Fonction pour rejeter un membre
+  const handleRejectMember = async (userId: number, userName: string) => {
+    if (isWeb) {
+      const reason = prompt(`Pourquoi refusez-vous ${userName} ?`);
+      if (reason !== null) {
+        try {
+          const accessToken = await AsyncStorage.getItem('accessToken');
+          if (!accessToken) return;
+
+          const response = await AssociationsApi.rejectMember(userId, reason || 'Demande refusée');
+          if (response.success) {
+            alert('Membre rejeté');
+            fetchPendingMembers();
+          }
+        } catch (error: any) {
+          alert(error.message || 'Impossible de rejeter le membre');
+        }
+      }
+    } else {
+      Alert.prompt(
+        'Rejeter le membre',
+        `Pourquoi refusez-vous ${userName} ?`,
+        [
+          { text: 'Annuler', style: 'cancel' },
+          {
+            text: 'Rejeter',
+            style: 'destructive',
+            onPress: async (reason) => {
+              try {
+                const accessToken = await AsyncStorage.getItem('accessToken');
+                if (!accessToken) return;
+
+                const response = await AssociationsApi.rejectMember(userId, reason || 'Demande refusée');
+                if (response.success) {
+                  Alert.alert('Succès', 'Membre rejeté');
+                  fetchPendingMembers();
+                }
+              } catch (error: any) {
+                Alert.alert('Erreur', error.message || 'Impossible de rejeter le membre');
+              }
+            },
+          },
+        ],
+        'plain-text'
+      );
+    }
+  };
 
   // Fonction pour télécharger tous les documents d'un candidat
   const handleDownloadAllDocuments = (request: RegistrationRequest) => {
@@ -242,6 +532,8 @@ export default function OrganizationScreen() {
   const tabs = [
     { id: 'administration' as TabType, label: 'Administration', icon: Building2 },
     { id: 'requests' as TabType, label: 'Demandes d\'inscription', icon: UserPlus },
+    { id: 'members' as TabType, label: 'Membres en attente', icon: Clock },
+    { id: 'all-members' as TabType, label: 'Tous les membres', icon: UserCog },
     { id: 'trainers' as TabType, label: 'Formateurs', icon: GraduationCap },
     { id: 'cadets' as TabType, label: 'Cadets', icon: Users },
   ];
@@ -493,15 +785,44 @@ export default function OrganizationScreen() {
     setIsEditing(false);
   };
 
-  const handleSave = () => {
-    // TODO: Appel API pour sauvegarder
-    setOrgInfo(editedInfo);
-    setIsEditing(false);
+  const handleSave = async () => {
+    try {
+      const accessToken = await AsyncStorage.getItem('accessToken');
+      if (!accessToken) return;
 
-    if (isWeb) {
-      alert('Informations mises à jour avec succès');
-    } else {
-      Alert.alert('Succès', 'Informations mises à jour avec succès');
+      // Récupérer les infos de l'utilisateur connecté
+      const meResponse = await AuthApi.getMe(accessToken);
+      if (!meResponse.success || !meResponse.data) return;
+
+      const associationId = meResponse.data.user.associationId;
+      if (!associationId) return;
+
+      const response = await AssociationsApi.update(associationId, {
+        name: editedInfo.name,
+        address: editedInfo.address,
+        postalCode: editedInfo.postalCode,
+        city: editedInfo.city,
+        email: editedInfo.email,
+        phone: editedInfo.phone,
+      });
+
+      if (response.success) {
+        setOrgInfo(editedInfo);
+        setIsEditing(false);
+
+        if (isWeb) {
+          alert('Informations mises à jour avec succès');
+        } else {
+          Alert.alert('Succès', 'Informations mises à jour avec succès');
+        }
+      }
+    } catch (error) {
+      console.error('Error updating organization:', error);
+      if (isWeb) {
+        alert('Erreur lors de la mise à jour');
+      } else {
+        Alert.alert('Erreur', 'Erreur lors de la mise à jour');
+      }
     }
   };
 
@@ -720,15 +1041,15 @@ export default function OrganizationScreen() {
 
                 <View style={styles.statsContainer}>
                   <View style={styles.statCard}>
-                    <Text style={styles.statValue}>15</Text>
+                    <Text style={styles.statValue}>{stats.activeUsers}</Text>
                     <Text style={styles.statLabel}>Membres</Text>
                   </View>
                   <View style={styles.statCard}>
-                    <Text style={styles.statValue}>42</Text>
+                    <Text style={styles.statValue}>{stats.documentsCount}</Text>
                     <Text style={styles.statLabel}>Documents</Text>
                   </View>
                   <View style={styles.statCard}>
-                    <Text style={styles.statValue}>8</Text>
+                    <Text style={styles.statValue}>{stats.foldersCount}</Text>
                     <Text style={styles.statLabel}>Dossiers</Text>
                   </View>
                 </View>
@@ -863,6 +1184,212 @@ export default function OrganizationScreen() {
                   );
                 })}
               </View>
+            </View>
+          )}
+
+          {/* Tab Content: Membres en attente */}
+          {activeTab === 'members' && (
+            <View style={styles.tabContent}>
+              <Text style={styles.emptyStateTitle}>Membres en attente de validation</Text>
+              <Text style={styles.emptyStateText}>
+                Approuvez ou rejetez les demandes d'inscription des nouveaux membres.
+              </Text>
+
+              {/* Loading state */}
+              {loadingMembers && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#2563eb" />
+                  <Text style={styles.loadingText}>Chargement...</Text>
+                </View>
+              )}
+
+              {/* Empty state */}
+              {!loadingMembers && pendingMembers.length === 0 && (
+                <View style={styles.emptyStateContainer}>
+                  <Clock color="#94a3b8" size={48} />
+                  <Text style={styles.emptyStateText}>Aucune demande en attente</Text>
+                </View>
+              )}
+
+              {/* Members list */}
+              {!loadingMembers && pendingMembers.length > 0 && (
+                <View style={styles.membersList}>
+                  {pendingMembers.map((member) => {
+                    const initials = `${member.firstName.charAt(0)}${member.lastName.charAt(0)}`;
+                    return (
+                      <View key={member.id} style={styles.pendingMemberCard}>
+                        <View style={styles.pendingMemberHeader}>
+                          <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                            <View style={[styles.memberAvatar, { backgroundColor: '#fef3c7' }]}>
+                              <Text style={[styles.memberAvatarText, { color: '#f59e0b' }]}>
+                                {initials}
+                              </Text>
+                            </View>
+                            <View style={styles.memberInfo}>
+                              <Text style={styles.memberName}>
+                                {member.firstName} {member.lastName}
+                              </Text>
+                              <Text style={styles.memberRole}>{member.role?.displayName}</Text>
+                            </View>
+                          </View>
+                          <View style={styles.pendingBadge}>
+                            <Clock color="#f59e0b" size={16} />
+                            <Text style={styles.pendingText}>En attente</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.memberDetails}>
+                          <View style={styles.detailRow}>
+                            <Mail color="#64748b" size={16} />
+                            <Text style={styles.detailText}>{member.email}</Text>
+                          </View>
+                          {member.phone && (
+                            <View style={styles.detailRow}>
+                              <Phone color="#64748b" size={16} />
+                              <Text style={styles.detailText}>{member.phone}</Text>
+                            </View>
+                          )}
+                          {member.city_code && (
+                            <View style={styles.detailRow}>
+                              <MapPin color="#64748b" size={16} />
+                              <Text style={styles.detailText}>CP: {member.city_code}</Text>
+                            </View>
+                          )}
+                          <View style={styles.detailRow}>
+                            <Calendar color="#64748b" size={16} />
+                            <Text style={styles.detailText}>
+                              Inscrit le {new Date(member.createdAt).toLocaleDateString('fr-FR')}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.memberActions}>
+                          <TouchableOpacity
+                            style={styles.rejectButton}
+                            onPress={() => handleRejectMember(member.id, `${member.firstName} ${member.lastName}`)}
+                          >
+                            <X color="#fff" size={20} />
+                            <Text style={styles.rejectButtonText}>Rejeter</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.approveButton}
+                            onPress={() => handleApproveMember(member.id, `${member.firstName} ${member.lastName}`)}
+                          >
+                            <CheckCircle2 color="#fff" size={20} />
+                            <Text style={styles.approveButtonText}>Approuver</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* Tab Content: Tous les membres */}
+          {activeTab === 'all-members' && (
+            <View style={styles.tabContent}>
+              <Text style={styles.emptyStateTitle}>Tous les membres actifs</Text>
+              <Text style={styles.emptyStateText}>
+                Liste de tous les membres actifs de votre association.
+              </Text>
+
+              {/* Loading state */}
+              {loadingAllMembers && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color="#2563eb" />
+                  <Text style={styles.loadingText}>Chargement...</Text>
+                </View>
+              )}
+
+              {/* Empty state */}
+              {!loadingAllMembers && allMembers.length === 0 && (
+                <View style={styles.emptyStateContainer}>
+                  <UserCog color="#94a3b8" size={48} />
+                  <Text style={styles.emptyStateText}>Aucun membre actif</Text>
+                </View>
+              )}
+
+              {/* Members list */}
+              {!loadingAllMembers && allMembers.length > 0 && (
+                <View style={styles.membersList}>
+                  {allMembers.map((member) => {
+                    const initials = `${member.firstName.charAt(0)}${member.lastName.charAt(0)}`;
+                    const roleColors: { [key: string]: { bg: string; text: string } } = {
+                      'Super Administrateur': { bg: '#fee2e2', text: '#dc2626' },
+                      'Administrateur': { bg: '#dbeafe', text: '#2563eb' },
+                      'Président': { bg: '#fef3c7', text: '#f59e0b' },
+                      'Directeur de Formation': { bg: '#e9d5ff', text: '#9333ea' },
+                      'Trésorier': { bg: '#e9d5ff', text: '#9333ea' },
+                      'Encadrant': { bg: '#d1fae5', text: '#059669' },
+                      'Candidat': { bg: '#f3f4f6', text: '#6b7280' },
+                    };
+                    const roleColor = roleColors[member.role.displayName] || { bg: '#f3f4f6', text: '#6b7280' };
+
+                    return (
+                      <View key={member.id} style={styles.pendingMemberCard}>
+                        <View style={styles.pendingMemberHeader}>
+                          <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                            <View style={[styles.memberAvatar, { backgroundColor: roleColor.bg }]}>
+                              <Text style={[styles.memberAvatarText, { color: roleColor.text }]}>
+                                {initials}
+                              </Text>
+                            </View>
+                            <View style={styles.memberInfo}>
+                              <Text style={styles.memberName}>
+                                {member.firstName} {member.lastName}
+                              </Text>
+                              <View style={[styles.roleBadge, { backgroundColor: roleColor.bg }]}>
+                                <Text style={[styles.roleText, { color: roleColor.text }]}>
+                                  {member.role.displayName}
+                                </Text>
+                              </View>
+                            </View>
+                          </View>
+                          <View style={[styles.statusBadge, { backgroundColor: '#d1fae5' }]}>
+                            <CheckCircle2 color="#059669" size={16} />
+                            <Text style={[styles.statusText, { color: '#059669' }]}>Actif</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.memberDetails}>
+                          <View style={styles.detailRow}>
+                            <Mail color="#64748b" size={16} />
+                            <Text style={styles.detailText}>{member.email}</Text>
+                          </View>
+                          {member.phone && (
+                            <View style={styles.detailRow}>
+                              <Phone color="#64748b" size={16} />
+                              <Text style={styles.detailText}>{member.phone}</Text>
+                            </View>
+                          )}
+                          {member.city_code && (
+                            <View style={styles.detailRow}>
+                              <MapPin color="#64748b" size={16} />
+                              <Text style={styles.detailText}>CP: {member.city_code}</Text>
+                            </View>
+                          )}
+                          <View style={styles.detailRow}>
+                            <Calendar color="#64748b" size={16} />
+                            <Text style={styles.detailText}>
+                              Membre depuis le {new Date(member.createdAt).toLocaleDateString('fr-FR')}
+                            </Text>
+                          </View>
+                          {member.lastLoginAt && (
+                            <View style={styles.detailRow}>
+                              <User color="#64748b" size={16} />
+                              <Text style={styles.detailText}>
+                                Dernière connexion: {new Date(member.lastLoginAt).toLocaleDateString('fr-FR')}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
             </View>
           )}
 
@@ -1524,6 +2051,118 @@ export default function OrganizationScreen() {
                     >
                       <Save color="#fff" size={20} />
                       <Text style={styles.confirmAppointmentButtonText}>Enregistrer</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal de sélection de rôle pour approbation */}
+      <Modal
+        visible={showRoleSelectionModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {
+          setShowRoleSelectionModal(false);
+          setSelectedMemberForApproval(null);
+          setSelectedRoleId(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Sélectionner un rôle</Text>
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  onPress={() => {
+                    setShowRoleSelectionModal(false);
+                    setSelectedMemberForApproval(null);
+                    setSelectedRoleId(null);
+                  }}
+                >
+                  <X color="#64748b" size={24} />
+                </TouchableOpacity>
+              </View>
+
+              {selectedMemberForApproval && (
+                <>
+                  <View style={styles.modalSection}>
+                    <Text style={styles.modalSectionTitle}>
+                      Approuver {selectedMemberForApproval.name}
+                    </Text>
+                    <Text style={styles.modalSectionDescription}>
+                      Sélectionnez le rôle à attribuer à ce membre
+                    </Text>
+                  </View>
+
+                  {loadingRoles ? (
+                    <View style={styles.loadingContainer}>
+                      <Loader2 color="#2563eb" size={24} />
+                      <Text style={styles.loadingText}>Chargement des rôles...</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.rolesContainer}>
+                      {availableRoles.length === 0 ? (
+                        <Text style={styles.noRolesText}>Aucun rôle disponible</Text>
+                      ) : (
+                        availableRoles.map((role) => (
+                          <TouchableOpacity
+                            key={role.id}
+                            style={[
+                              styles.roleOption,
+                              selectedRoleId === role.id && styles.roleOptionActive
+                            ]}
+                            onPress={() => setSelectedRoleId(role.id)}
+                          >
+                            <View>
+                              <Text style={[
+                                styles.roleOptionText,
+                                selectedRoleId === role.id && styles.roleOptionTextActive
+                              ]}>
+                                {role.displayName}
+                              </Text>
+                              {role.description && (
+                                <Text style={styles.roleOptionDescription}>
+                                  {role.description}
+                                </Text>
+                              )}
+                            </View>
+                            {selectedRoleId === role.id && (
+                              <CheckCircle2 color="#2563eb" size={20} />
+                            )}
+                          </TouchableOpacity>
+                        ))
+                      )}
+                    </View>
+                  )}
+
+                  {/* Actions */}
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity
+                      style={styles.cancelAppointmentButton}
+                      onPress={() => {
+                        setShowRoleSelectionModal(false);
+                        setSelectedMemberForApproval(null);
+                        setSelectedRoleId(null);
+                      }}
+                    >
+                      <Text style={styles.cancelAppointmentButtonText}>Annuler</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.confirmAppointmentButton,
+                        !selectedRoleId && styles.confirmAppointmentButtonDisabled
+                      ]}
+                      onPress={confirmApproveMember}
+                      disabled={!selectedRoleId}
+                    >
+                      <CheckCircle2 color="#fff" size={20} />
+                      <Text style={styles.confirmAppointmentButtonText}>Approuver</Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -2271,6 +2910,46 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
   },
+  confirmAppointmentButtonDisabled: {
+    backgroundColor: '#94a3b8',
+    opacity: 0.6,
+  },
+  modalSectionDescription: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 8,
+  },
+  rolesContainer: {
+    gap: 10,
+    marginTop: 16,
+    marginBottom: 24,
+    maxWidth: 500,
+    alignSelf: 'center',
+    width: '100%',
+  },
+  roleOptionDescription: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    padding: 24,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#64748b',
+  },
+  noRolesText: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    padding: 24,
+  },
   cadetModalHeader: {
     alignItems: 'center',
     padding: 24,
@@ -2314,21 +2993,32 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   roleOption: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    padding: 12,
     borderWidth: 2,
     borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
   roleOptionActive: {
     backgroundColor: '#eff6ff',
     borderColor: '#2563eb',
+    shadowColor: '#2563eb',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   roleOptionText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#64748b',
-    textAlign: 'center',
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1e293b',
   },
   roleOptionTextActive: {
     color: '#2563eb',
@@ -2446,5 +3136,107 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#2563eb',
+  },
+  pendingMemberCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    marginBottom: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  pendingMemberHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  pendingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  pendingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#f59e0b',
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  roleText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  memberDetails: {
+    gap: 10,
+    marginBottom: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  detailText: {
+    fontSize: 14,
+    color: '#475569',
+  },
+  memberActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  rejectButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ef4444',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  rejectButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  approveButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#10b981',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  approveButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 15,
   },
 });

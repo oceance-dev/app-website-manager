@@ -1,5 +1,4 @@
 import vine from '@vinejs/vine'
-import { UserRole } from '../../types/HelperPermAndRole.js'
 
 /**
  * Validation de l'inscription d'une association
@@ -144,12 +143,17 @@ export const registerAssociationMemberValidator = vine.compile(
                     return !!association
                 }),
 
-            role: vine.enum([
-                UserRole.PRESIDENT,
-                UserRole.DIRECTEUR_FORMATION,
-                UserRole.TRESORIER,
-                UserRole.FORMATEUR,
-            ])
+            roleId: vine
+                .number()
+                .positive()
+                .exists(async (db, value) => {
+                    const role = await db
+                        .from('roles')
+                        .where('id', value)
+                        .where('is_active', true)
+                        .first()
+                    return !!role
+                })
         })
     })
 )

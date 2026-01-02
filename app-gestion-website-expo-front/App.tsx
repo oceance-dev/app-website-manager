@@ -5,7 +5,7 @@ import AppNavigator from './src/navigation/AppNavigator';
 import SignScreen from './src/components/auth/SignScreen';
 import { User } from './src/types';
 import { AuthApi } from './src/api';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { tokenStorage } from './src/api/tokenStorage';
 import './src/styles/globals.css';
 
 export default function App() {
@@ -21,8 +21,8 @@ export default function App() {
   const handleLogout = async () => {
     try {
       // Récupérer les tokens
-      const accessToken = await AsyncStorage.getItem('accessToken');
-      const refreshToken = await AsyncStorage.getItem('refreshToken');
+      const accessToken = await tokenStorage.getAccessToken();
+      const refreshToken = await tokenStorage.getRefreshToken();
 
       if (accessToken) {
         // Appel API de déconnexion
@@ -31,8 +31,7 @@ export default function App() {
       }
 
       // Supprimer les tokens localement
-      await AsyncStorage.removeItem('accessToken');
-      await AsyncStorage.removeItem('refreshToken');
+      await tokenStorage.clearTokens();
     } catch (error) {
       console.error('⚠️ Logout error:', error);
       // Continuer la déconnexion même en cas d'erreur API
