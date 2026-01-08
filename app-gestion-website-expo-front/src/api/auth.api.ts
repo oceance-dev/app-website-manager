@@ -99,7 +99,7 @@ export interface RegisterMemberData {
     dateOfBirth: string;
     sexe: 'Homme' | 'Femme';
     associationId: number;
-    role: string;
+    roleId: number;
   };
 }
 
@@ -153,7 +153,7 @@ export const AuthApi = {
    * Connexion
    */
   async login(loginData: LoginData): Promise<ApiResponse<LoginResponse>> {
-    const data = await api.post<LoginResponse>(UrlApi.authApi.login, loginData);
+    const data = await api.post<LoginResponse>(UrlApi.authApi.login, loginData, { skipAuth: true });
     return { success: true, data };
   },
 

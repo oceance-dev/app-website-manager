@@ -16,6 +16,7 @@ import { getRoleDisplay } from '../../utils/permissions';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { RolesApi, Role } from '../../api/roles.api';
+import { isMobile, getFontSize, getSpacing, getResponsivePadding, MIN_TOUCH_TARGET, getModalWidth, getModalHeight } from '../../utils/responsive';
 
 interface CreateFolderModalProps {
   visible: boolean;
@@ -230,40 +231,46 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
+    justifyContent: isMobile ? 'flex-end' : 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: isMobile ? 0 : 20,
   },
   modalContainer: {
     backgroundColor: 'white',
-    borderRadius: 16,
-    width: '100%',
-    maxWidth: 700,
-    maxHeight: '90%',
+    borderRadius: isMobile ? 16 : 16,
+    borderBottomLeftRadius: isMobile ? 0 : 16,
+    borderBottomRightRadius: isMobile ? 0 : 16,
+    width: isMobile ? '100%' : getModalWidth(),
+    maxWidth: isMobile ? '100%' : 700,
+    maxHeight: isMobile ? '95%' : '90%',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    padding: 20,
+    padding: getResponsivePadding(),
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: getFontSize(isMobile ? 18 : 20),
     fontWeight: 'bold',
     color: '#1e293b',
     marginBottom: 4,
   },
   headerSubtitle: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     color: '#475569',
   },
   closeButton: {
     padding: 4,
+    minWidth: isMobile ? MIN_TOUCH_TARGET : 'auto',
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   content: {
-    padding: 20,
+    padding: getResponsivePadding(),
   },
   inputSection: {
     marginBottom: 24,
@@ -272,7 +279,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     fontWeight: '600',
     color: '#334155',
     marginBottom: 8,
@@ -296,34 +303,36 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   userRow: {
-    flexDirection: 'row',
+    flexDirection: isMobile ? 'column' : 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 4,
+    alignItems: isMobile ? 'stretch' : 'center',
+    paddingVertical: getSpacing(12),
+    paddingHorizontal: getSpacing(4),
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
+    gap: isMobile ? 12 : 0,
   },
   userInfo: {
     flex: 1,
   },
   userName: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     fontWeight: '600',
     color: '#1e293b',
     marginBottom: 2,
   },
   userRole: {
-    fontSize: 12,
+    fontSize: getFontSize(12),
     color: '#475569',
   },
   permissionButtons: {
     flexDirection: 'row',
     gap: 8,
+    justifyContent: isMobile ? 'flex-start' : 'flex-end',
   },
   permissionButton: {
-    width: 40,
-    height: 40,
+    width: isMobile ? MIN_TOUCH_TARGET : 40,
+    height: isMobile ? MIN_TOUCH_TARGET : 40,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -347,12 +356,12 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 8,
-    fontSize: 14,
+    fontSize: getFontSize(14),
     color: '#64748b',
   },
   footer: {
-    flexDirection: 'row',
-    padding: 20,
+    flexDirection: isMobile ? 'column' : 'row',
+    padding: getResponsivePadding(),
     gap: 12,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',

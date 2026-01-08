@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshCon
 import { UsersApi, UserResponse } from '../api/users.api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Check, X, Clock, Mail, Phone, MapPin } from 'lucide-react-native';
+import { isMobile, getFontSize, getSpacing, getResponsivePadding, MIN_TOUCH_TARGET } from '../utils/responsive';
 
 export default function PendingMembersScreen() {
   const [pendingUsers, setPendingUsers] = useState<UserResponse[]>([]);
@@ -206,13 +207,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 20,
+    padding: getResponsivePadding(),
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
   title: {
-    fontSize: 24,
+    fontSize: getFontSize(isMobile ? 20 : 24),
     fontWeight: 'bold',
     color: '#1e293b',
   },
@@ -236,34 +237,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    fontSize: 16,
+    fontSize: getFontSize(16),
     color: '#64748b',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 40,
+    padding: getSpacing(40),
     marginTop: 100,
   },
   emptyText: {
-    fontSize: 18,
+    fontSize: getFontSize(18),
     fontWeight: '600',
     color: '#475569',
     marginTop: 16,
   },
   emptySubtext: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     color: '#94a3b8',
     marginTop: 8,
     textAlign: 'center',
   },
   card: {
     backgroundColor: '#fff',
-    margin: 16,
+    margin: getResponsivePadding(),
     marginBottom: 0,
     borderRadius: 12,
-    padding: 16,
+    padding: getSpacing(16),
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -277,12 +278,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   userName: {
-    fontSize: 18,
+    fontSize: getFontSize(18),
     fontWeight: 'bold',
     color: '#1e293b',
   },
   userRole: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     color: '#64748b',
     marginTop: 4,
   },
@@ -310,16 +311,16 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   infoLabel: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     color: '#64748b',
     fontWeight: '500',
   },
   infoText: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     color: '#475569',
   },
   actions: {
-    flexDirection: 'row',
+    flexDirection: isMobile ? 'column' : 'row',
     gap: 12,
     marginTop: 8,
   },
@@ -329,14 +330,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#ef4444',
-    paddingVertical: 12,
+    paddingVertical: isMobile ? 14 : 12,
     borderRadius: 8,
     gap: 8,
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   rejectButtonText: {
     color: '#fff',
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: getFontSize(16),
   },
   approveButton: {
     flex: 1,
@@ -344,13 +346,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#10b981',
-    paddingVertical: 12,
+    paddingVertical: isMobile ? 14 : 12,
     borderRadius: 8,
     gap: 8,
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   approveButtonText: {
     color: '#fff',
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: getFontSize(16),
   },
 });

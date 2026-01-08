@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, StatusBar } from 'react-native';
 import { Settings, LogOut, User, Search, Bell, Menu } from 'lucide-react-native';
 import { MenuItem } from '../../types';
-import { isWeb } from '../../utils/responsive';
+import { isWeb, isMobile, getFontSize, getSpacing, getResponsivePadding, MIN_TOUCH_TARGET } from '../../utils/responsive';
 
 interface HeaderProps {
   activeScreen: string;
@@ -99,23 +99,24 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f1f5f9',
   },
   content: {
-    flexDirection: 'row',
+    flexDirection: isMobile ? 'column' : 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    minHeight: 72,
+    alignItems: isMobile ? 'stretch' : 'center',
+    paddingHorizontal: getResponsivePadding(),
+    paddingVertical: getResponsivePadding(),
+    minHeight: isMobile ? 'auto' : 72,
+    gap: isMobile ? 12 : 0,
   },
   menuButton: {
-    width: 40,
-    height: 40,
+    width: MIN_TOUCH_TARGET,
+    height: MIN_TOUCH_TARGET,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   rightSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: isMobile ? 'column' : 'row',
+    alignItems: isMobile ? 'stretch' : 'center',
     gap: 12,
   },
   searchContainer: {
@@ -123,22 +124,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#f8fafc',
     borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: getSpacing(12),
+    paddingVertical: isMobile ? 12 : 8,
     gap: 8,
-    minWidth: 240,
+    minWidth: isMobile ? '100%' : 240,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: getFontSize(14),
     color: '#1e293b',
     outlineStyle: 'none',
   } as any,
   iconButton: {
-    width: 40,
-    height: 40,
+    width: MIN_TOUCH_TARGET,
+    height: MIN_TOUCH_TARGET,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -165,9 +167,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingVertical: isMobile ? 12 : 6,
+    paddingHorizontal: isMobile ? 12 : 8,
     borderRadius: 10,
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   avatar: {
     width: 40,
@@ -178,26 +181,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     fontWeight: '700',
     color: '#fff',
   },
   profileInfo: {
     alignItems: 'flex-start',
+    display: isMobile ? 'none' : 'flex',
   },
   profileName: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     fontWeight: '600',
     color: '#1e293b',
   },
   profileRole: {
-    fontSize: 12,
+    fontSize: getFontSize(12),
     color: '#64748b',
     marginTop: 2,
   },
   logoutButton: {
-    width: 40,
-    height: 40,
+    width: MIN_TOUCH_TARGET,
+    height: MIN_TOUCH_TARGET,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',

@@ -16,10 +16,10 @@ export default class Association extends BaseModel {
   declare name: string
 
   @column()
-  declare rna?: string // Numéro RNA (w + 9 chiffres)
+  declare rna?: string | null // Numéro RNA (w + 9 chiffres)
 
   @column()
-  declare siret?: string // 14 chiffres
+  declare siret?: string | null // 14 chiffres
 
   /**
    * Contact

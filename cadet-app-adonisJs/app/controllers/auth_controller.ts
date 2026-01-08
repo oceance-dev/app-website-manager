@@ -111,6 +111,7 @@ export default class AuthController {
             return response.unauthorized({
                 success: false,
                 message: error.message || 'Identifiants invalides',
+                code: error.code || 'AUTH_ERROR',
                 errors: [{ message: error.message }],
             })
         }

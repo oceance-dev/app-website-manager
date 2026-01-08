@@ -18,7 +18,7 @@ import AddDocumentModal from '../components/modalsHelper/AddDocumentModal';
 import CreateFolderModal from '../components/modalsHelper/CreateFolderModal';
 import DocumentViewerModal from '../components/modalsHelper/DocumentViewerModal';
 import { canUserAccessFolder, getUserRoleOnFolder, getRoleDisplay } from '../utils/permissions';
-import { isWeb } from '../utils/responsive';
+import { isWeb, isMobile, getFontSize, getSpacing, getResponsivePadding, MIN_TOUCH_TARGET, isSmallMobile } from '../utils/responsive';
 import { Button } from '../components/ui/button';
 import { DocumentsApi, FoldersApi, AuthApi, AssociationsApi, type AuthUser } from '../api';
 import { tokenStorage } from '../api/tokenStorage';
@@ -895,12 +895,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
-    flexDirection: 'row',
+    flexDirection: isMobile ? 'column' : 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
+    alignItems: isMobile ? 'stretch' : 'center',
+    padding: getResponsivePadding(),
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
+    gap: isMobile ? 12 : 0,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -932,8 +933,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   headerActions: {
-    flexDirection: 'row',
-    gap: 8,
+    flexDirection: isMobile ? 'column' : 'row',
+    gap: isMobile ? 8 : 8,
+    width: isMobile ? '100%' : 'auto',
   },
   backButton: {
     width: 32,
@@ -944,43 +946,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 24,
+    fontSize: getFontSize(isMobile ? 20 : 24),
     fontWeight: 'bold',
     color: '#1e293b',
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: getFontSize(isMobile ? 12 : 14),
     color: '#64748b',
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#2563eb',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: getSpacing(16),
+    paddingVertical: isMobile ? 14 : 10,
     borderRadius: 8,
     gap: 8,
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   createFolderButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#eff6ff',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: getSpacing(16),
+    paddingVertical: isMobile ? 14 : 10,
     borderRadius: 8,
     gap: 8,
     borderWidth: 2,
     borderColor: '#2563eb',
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   createFolderButtonText: {
     color: '#2563eb',
-    fontSize: 14,
+    fontSize: getFontSize(14),
     fontWeight: '600',
   },
   addButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: getFontSize(14),
     fontWeight: '600',
   },
   downloadAllButton: {
@@ -992,7 +998,7 @@ const styles = StyleSheet.create({
     color: '#2563eb',
   },
   scrollContent: {
-    padding: 16,
+    padding: getResponsivePadding(),
   },
   card: {
     backgroundColor: '#fff',
@@ -1005,13 +1011,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   listContent: {
-    padding: 20,
+    padding: getResponsivePadding(),
   },
   section: {
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: getFontSize(16),
     fontWeight: '600',
     color: '#334155',
     marginBottom: 12,
@@ -1019,7 +1025,7 @@ const styles = StyleSheet.create({
   folderCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
+    padding: getSpacing(16),
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1028,6 +1034,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   folderIcon: {
     marginRight: 16,
@@ -1042,12 +1049,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   folderName: {
-    fontSize: 16,
+    fontSize: getFontSize(16),
     fontWeight: '600',
     color: '#1e293b',
   },
   folderMeta: {
-    fontSize: 12,
+    fontSize: getFontSize(12),
     color: '#64748b',
   },
   folderActions: {
@@ -1076,29 +1083,32 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyStateText: {
-    fontSize: 16,
+    fontSize: getFontSize(16),
     color: '#94a3b8',
     marginTop: 16,
+    textAlign: 'center',
+    paddingHorizontal: getSpacing(20),
   },
   documentCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
+    padding: getSpacing(16),
     marginBottom: 12,
-    flexDirection: 'row',
+    flexDirection: isMobile ? 'column' : 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: isMobile ? 'stretch' : 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    gap: isMobile ? 12 : 0,
   },
   documentInfo: {
     flex: 1,
   },
   documentName: {
-    fontSize: 16,
+    fontSize: getFontSize(16),
     fontWeight: '600',
     color: '#1e293b',
     marginBottom: 8,
@@ -1125,10 +1135,12 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: isMobile ? 'flex-start' : 'flex-end',
   },
   actionButton: {
-    width: 36,
-    height: 36,
+    width: isMobile ? MIN_TOUCH_TARGET : 36,
+    height: isMobile ? MIN_TOUCH_TARGET : 36,
     borderRadius: 8,
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
@@ -1138,16 +1150,18 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
+    justifyContent: isMobile ? 'flex-end' : 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: isMobile ? 0 : 20,
   },
   permissionsModalContainer: {
     backgroundColor: '#fff',
-    borderRadius: 16,
+    borderRadius: isMobile ? 16 : 16,
+    borderBottomLeftRadius: isMobile ? 0 : 16,
+    borderBottomRightRadius: isMobile ? 0 : 16,
     width: '100%',
-    maxWidth: 500,
-    maxHeight: '80%',
+    maxWidth: isMobile ? '100%' : 500,
+    maxHeight: isMobile ? '90%' : '80%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -1158,20 +1172,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: getResponsivePadding(),
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: getFontSize(isMobile ? 18 : 20),
     fontWeight: 'bold',
     color: '#1e293b',
   },
   closeButton: {
     padding: 4,
+    minWidth: isMobile ? MIN_TOUCH_TARGET : 'auto',
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   documentNameSection: {
-    padding: 20,
+    padding: getResponsivePadding(),
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
@@ -1188,10 +1206,10 @@ const styles = StyleSheet.create({
   },
   cadetsList: {
     flex: 1,
-    padding: 20,
+    padding: getResponsivePadding(),
   },
   cadetsListTitle: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     fontWeight: '600',
     color: '#334155',
     marginBottom: 16,
@@ -1200,21 +1218,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: isMobile ? 16 : 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f1f5f9',
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   cadetInfo: {
     flex: 1,
   },
   cadetName: {
-    fontSize: 16,
+    fontSize: getFontSize(16),
     fontWeight: '600',
     color: '#1e293b',
     marginBottom: 2,
   },
   cadetRole: {
-    fontSize: 12,
+    fontSize: getFontSize(12),
     color: '#64748b',
   },
   emptyText: {
@@ -1225,8 +1244,8 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   modalFooter: {
-    flexDirection: 'row',
-    padding: 20,
+    flexDirection: isMobile ? 'column' : 'row',
+    padding: getResponsivePadding(),
     gap: 12,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
@@ -1249,7 +1268,7 @@ const styles = StyleSheet.create({
     minWidth: 200,
   },
   loadingText: {
-    fontSize: 16,
+    fontSize: getFontSize(16),
     color: '#1e293b',
     fontWeight: '500',
   },

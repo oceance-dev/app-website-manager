@@ -5,7 +5,7 @@ import { MenuItem } from '../../types';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types';
-import { isWeb, isLargeScreen } from '../../utils/responsive';
+import { isWeb, isLargeScreen, isMobile, getFontSize, getSpacing, getResponsivePadding, MIN_TOUCH_TARGET } from '../../utils/responsive';
 
 interface SidebarProps {
   activeScreen: string;
@@ -87,7 +87,7 @@ export default function Sidebar({ activeScreen, menuItems, onNavigate }: Sidebar
 
 const styles = StyleSheet.create({
   container: {
-    width: 280,
+    width: isMobile ? '100%' : 280,
     backgroundColor: '#fff',
     height: '100%',
   },
@@ -97,13 +97,13 @@ const styles = StyleSheet.create({
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 24,
-    paddingBottom: 20,
+    padding: getResponsivePadding(),
+    paddingBottom: getSpacing(20),
     gap: 12,
   },
   logo: {
-    width: 48,
-    height: 48,
+    width: isMobile ? 40 : 48,
+    height: isMobile ? 40 : 48,
     backgroundColor: '#2563eb',
     borderRadius: 12,
     alignItems: 'center',
@@ -115,27 +115,27 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   logoText: {
-    fontSize: 24,
+    fontSize: getFontSize(isMobile ? 20 : 24),
     fontWeight: 'bold',
     color: '#fff',
   },
   appName: {
-    fontSize: 20,
+    fontSize: getFontSize(isMobile ? 18 : 20),
     fontWeight: 'bold',
     color: '#1e293b',
   },
   appSubtitle: {
-    fontSize: 13,
+    fontSize: getFontSize(13),
     color: '#64748b',
     marginTop: 2,
   },
   menuContainer: {
     flex: 1,
-    paddingHorizontal: 16,
+    paddingHorizontal: getResponsivePadding(),
     paddingTop: 8,
   },
   menuTitle: {
-    fontSize: 11,
+    fontSize: getFontSize(11),
     fontWeight: '600',
     color: '#94a3b8',
     letterSpacing: 0.5,
@@ -145,18 +145,19 @@ const styles = StyleSheet.create({
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: getSpacing(12),
     borderRadius: 12,
     marginBottom: 4,
     gap: 12,
     backgroundColor: 'transparent',
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   menuItemActive: {
     backgroundColor: '#eff6ff',
   },
   iconContainer: {
-    width: 36,
-    height: 36,
+    width: isMobile ? MIN_TOUCH_TARGET - 8 : 36,
+    height: isMobile ? MIN_TOUCH_TARGET - 8 : 36,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -166,7 +167,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#dbeafe',
   },
   menuText: {
-    fontSize: 15,
+    fontSize: getFontSize(15),
     fontWeight: '500',
     color: '#475569',
   },

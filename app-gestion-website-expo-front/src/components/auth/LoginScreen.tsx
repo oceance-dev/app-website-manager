@@ -26,17 +26,18 @@ interface LoginScreenProps {
 export default function LoginScreen({ onLogin, onNavigateToSign, onNavigateToOrgSignup }: LoginScreenProps) {
   const [loginData, setLoginData] = useState<LoginData>({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+  const [hasError, setHasError] = useState(false);
 
   const handleLogin = async () => {
     if (!loginData.email || !loginData.password) {
-      if (isWeb) {
-        alert('Veuillez remplir tous les champs');
-      } else {
-        Alert.alert('Erreur', 'Veuillez remplir tous les champs');
-      }
+      setErrorMessage('Veuillez remplir tous les champs');
+      setHasError(true);
       return;
     }
 
+    setErrorMessage(''); // Réinitialiser le message d'erreur
+    setHasError(false);
     setIsLoading(true);
 
     try {
@@ -73,19 +74,31 @@ export default function LoginScreen({ onLogin, onNavigateToSign, onNavigateToOrg
     } catch (error) {
       console.error('⚠️ Login failed:', error);
 
-      let errorMessage = 'Email ou mot de passe incorrect';
+      let displayErrorMessage = 'Email ou mot de passe incorrect';
 
       if (error instanceof ApiError) {
-        errorMessage = error.message;
+        // Vérifier les codes d'erreur spécifiques du backend
+        if (error.message.includes('compte n\'est pas encore activé') ||
+            error.message.includes('ACCOUNT_INACTIVE')) {
+          displayErrorMessage =
+            '⏳ Votre compte n\'est pas encore activé.\n' +
+            'Un administrateur doit valider votre inscription avant que vous puissiez vous connecter.\n' +
+            'Vous recevrez un email de confirmation dès que votre compte sera activé.';
+        } else if (error.message.includes('association n\'est pas active') ||
+                   error.message.includes('ASSOCIATION_INACTIVE')) {
+          displayErrorMessage =
+            '⏳ Votre association n\'est pas encore validée.\n' +
+            'Un super administrateur doit approuver votre association avant que vous puissiez vous connecter.\n' +
+            'Vous recevrez un email de confirmation dès que votre association sera validée.';
+        } else {
+          displayErrorMessage = error.message;
+        }
       } else if (error instanceof Error) {
-        errorMessage = error.message;
+        displayErrorMessage = error.message;
       }
 
-      if (isWeb) {
-        alert(errorMessage);
-      } else {
-        Alert.alert('Erreur de connexion', errorMessage);
-      }
+      setErrorMessage(displayErrorMessage);
+      setHasError(true);
     } finally {
       setIsLoading(false);
     }
@@ -168,16 +181,42 @@ export default function LoginScreen({ onLogin, onNavigateToSign, onNavigateToOrg
           >
             <Text style={{ fontSize: 24, color: '#1e293b', fontWeight: 'bold', marginBottom: 24 }}>Connexion</Text>
 
+            {/* Message d'erreur */}
+            {errorMessage && (
+              <View style={{
+                padding: 12,
+                marginBottom: 16,
+                backgroundColor: '#fef2f2',
+                borderRadius: 8,
+                borderLeftWidth: 4,
+                borderLeftColor: '#dc2626'
+              }}>
+                <Text style={{ fontSize: 13, color: '#dc2626', lineHeight: 18 }}>
+                  {errorMessage}
+                </Text>
+              </View>
+            )}
+
             <View style={{ marginBottom: 16 }}>
               <Input
                 label="Adresse email"
                 placeholder="votre@email.com"
                 value={loginData.email}
-                onChangeText={(text) => setLoginData({ ...loginData, email: text })}
+                onChangeText={(text) => {
+                  setLoginData({ ...loginData, email: text });
+                  if (errorMessage) {
+                    setErrorMessage('');
+                    setHasError(false);
+                  }
+                }}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 onSubmitEditing={handleLogin}
                 leftIcon={<Mail color="#94a3b8" size={20} />}
+                wrapperStyle={hasError ? {
+                  borderColor: '#dc2626',
+                  borderWidth: 2,
+                } : {}}
               />
             </View>
 
@@ -186,10 +225,20 @@ export default function LoginScreen({ onLogin, onNavigateToSign, onNavigateToOrg
                 label="Mot de passe"
                 placeholder="••••••••"
                 value={loginData.password}
-                onChangeText={(text) => setLoginData({ ...loginData, password: text })}
+                onChangeText={(text) => {
+                  setLoginData({ ...loginData, password: text });
+                  if (errorMessage) {
+                    setErrorMessage('');
+                    setHasError(false);
+                  }
+                }}
                 secureTextEntry
                 onSubmitEditing={handleLogin}
                 leftIcon={<Lock color="#94a3b8" size={20} />}
+                wrapperStyle={hasError ? {
+                  borderColor: '#dc2626',
+                  borderWidth: 2,
+                } : {}}
               />
             </View>
 
@@ -210,18 +259,12 @@ export default function LoginScreen({ onLogin, onNavigateToSign, onNavigateToOrg
               )}
             </Button>
 
-            <View style={{ padding: 12, marginTop: 20, backgroundColor: '#dbeafe', borderRadius: 8 }}>
-              <Text style={{ fontSize: 12, color: '#1e40af', fontWeight: '600', marginBottom: 8 }}>Comptes de démonstration :</Text>
-              <View style={{ marginBottom: 8 }}>
-                <Text style={{ fontSize: 12, color: '#1e40af', fontWeight: '600' }}>Admin :</Text>
-                <Text style={{ fontSize: 12, color: '#1e40af' }}>Email: admin@monapp.fr</Text>
-                <Text style={{ fontSize: 12, color: '#1e40af' }}>Mot de passe: admin123</Text>
-              </View>
-              <View>
-                <Text style={{ fontSize: 12, color: '#1e40af', fontWeight: '600' }}>Candidat :</Text>
-                <Text style={{ fontSize: 12, color: '#1e40af' }}>Email: candidat@monapp.fr</Text>
-                <Text style={{ fontSize: 12, color: '#1e40af' }}>Mot de passe: candidat123</Text>
-              </View>
+            <View style={{ padding: 16, marginTop: 20, backgroundColor: '#fef3c7', borderRadius: 8, borderLeftWidth: 4, borderLeftColor: '#f59e0b' }}>
+              <Text style={{ fontSize: 13, color: '#92400e', fontWeight: '600', marginBottom: 8 }}>ℹ️ Compte en attente de validation ?</Text>
+              <Text style={{ fontSize: 12, color: '#92400e', lineHeight: 18 }}>
+                Si vous venez de vous inscrire, votre compte doit être validé par un administrateur avant de pouvoir vous connecter.{'\n\n'}
+                Vous recevrez un email de confirmation dès que votre compte sera activé.
+              </Text>
             </View>
 
             {/* Lien vers inscription organisation */}

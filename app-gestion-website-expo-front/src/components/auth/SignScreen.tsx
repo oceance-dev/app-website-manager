@@ -24,8 +24,9 @@ type UserType = 'candidat' | 'cadet' | 'organization' | 'admin_member' | null;
 
 interface OrganizationData {
   organizationName: string;
-  rna: string;
-  siret: string;
+  rna: string | null;
+  siret: string | null;
+  address?: string | null;
   city: string;
   postalCode: string;
   country: string;
@@ -52,8 +53,9 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
   });
   const [orgData, setOrgData] = useState<OrganizationData>({
     organizationName: '',
-    rna: '',
-    siret: '',
+    rna: null,
+    siret: null,
+    address: null,
     city: '',
     postalCode: '',
     country: 'France',
@@ -63,6 +65,11 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
   const [isLoading, setIsLoading] = useState(false);
   const [selectedAssociationId, setSelectedAssociationId] = useState<number | null>(null);
   const [associations, setAssociations] = useState<Array<{ id: number; name: string; postalCode: string }>>([]);
+  const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
+  const [selectedRoleId, setSelectedRoleId] = useState<number | null>(null);
+  const [occupiedRoleNames, setOccupiedRoleNames] = useState<string[]>([]);
+  const [showSuccessCard, setShowSuccessCard] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Charger les associations au montage du composant
   React.useEffect(() => {
@@ -245,23 +252,13 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
           if (response.success && response.data) {
             console.log('✅ Association registered via API');
 
-            const newUser: User = {
-              id: response.data.responsable.id,
-              lastname: signData.lastname,
-              firstname: signData.firstname,
-              email: signData.email,
-              role: 'Admin',
-              statut: 'En attente',
-              phone: signData.phone || '',
-            };
-
-            if (isWeb) {
-              alert(response.message || 'Inscription enregistrée avec succès. Votre demande est en cours de validation.');
-            } else {
-              Alert.alert('Succès', response.message || 'Inscription enregistrée avec succès. Votre demande est en cours de validation.');
-            }
-
-            onSign(newUser);
+            // Afficher la card de confirmation
+            setSuccessMessage(
+              'Votre demande d\'inscription a bien été enregistrée.\n\n' +
+              '⏳ Un super administrateur va examiner votre demande.\n\n' +
+              'Vous recevrez un email de confirmation une fois votre association validée.'
+            );
+            setShowSuccessCard(true);
           }
         } catch (apiError) {
           // L'API a échoué
@@ -302,8 +299,9 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
               phone: signData.phone || '',
               city_code: signData.postalCode || '',
               dateOfBirth: signData.dateOfbirth || '',
-              sexe: signData.sexe === 0 ? 'Homme' : 'Femme',
-              associationId: selectedAssociationId,
+              sexe: signData.sexe === 0 ? 'Homme' as const : 'Femme' as const,
+              associationId: selectedAssociationId!,
+              roleId: selectedRoleId!,
             },
           };
 
@@ -316,18 +314,13 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
           if (response.success && response.data) {
             console.log('✅ Member registered via API');
 
-            const validationMessage = `Inscription réussie !\n\n⏳ Votre compte doit être validé par un administrateur de votre association avant de pouvoir vous connecter.\n\nL'administrateur vous attribuera un rôle lors de la validation.\n\nVous recevrez un email de confirmation une fois votre compte activé.`;
-
-            if (isWeb) {
-              alert(validationMessage);
-            } else {
-              Alert.alert('Inscription réussie', validationMessage);
-            }
-
-            // Rediriger vers la page de login au lieu de connecter automatiquement
-            if (onNavigateToLogin) {
-              onNavigateToLogin();
-            }
+            // Afficher la card de confirmation
+            setSuccessMessage(
+              'Votre demande d\'inscription a bien été enregistrée.\n\n' +
+              '⏳ Un administrateur de votre association va examiner votre demande.\n\n' +
+              'Vous recevrez un email de confirmation une fois votre compte validé.'
+            );
+            setShowSuccessCard(true);
           }
         } catch (apiError) {
           console.error('⚠️ Member registration failed:', apiError);
@@ -417,774 +410,793 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
       >
         <View style={styles.formContainer}>
           <View style={[styles.card, isWeb && styles.cardWeb]}>
-            <Text style={styles.title}>Inscription</Text>
-
-            {/* Étape 0 : Choix du type */}
-            {currentStep === 0 && (
-              <View style={styles.choiceContainer}>
-                <Text style={styles.subtitle}>Je suis...</Text>
-
-                <TouchableOpacity
-                  style={styles.choiceCard}
-                  onPress={() => handleSelectUserType('cadet')}
-                  activeOpacity={0.7}
+            {/* Card de succès */}
+            {showSuccessCard ? (
+              <View style={styles.successContainer}>
+                <View style={styles.successIconContainer}>
+                  <Text style={styles.successIcon}>✅</Text>
+                </View>
+                <Text style={styles.successTitle}>Inscription enregistrée !</Text>
+                <Text style={styles.successMessage}>{successMessage}</Text>
+                <Button
+                  onPress={onNavigateToLogin}
+                  style={styles.successButton}
                 >
-                  <View style={[styles.choiceIcon, { backgroundColor: '#dbeafe' }]}>
-                    <UserIcon color="#2563eb" size={26} />
-                  </View>
-                  <Text style={styles.choiceTitle}>Un Cadet</Text>
-                  <Text style={styles.choiceDescription}>
-                    Rejoindre une association en tant que cadet
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.choiceCard}
-                  onPress={() => handleSelectUserType('organization')}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.choiceIcon, { backgroundColor: '#dcfce7' }]}>
-                    <Users color="#10b981" size={26} />
-                  </View>
-                  <Text style={styles.choiceTitle}>Une Association</Text>
-                  <Text style={styles.choiceDescription}>
-                    Créer un espace pour mon association
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.choiceCard}
-                  onPress={() => handleSelectUserType('admin_member')}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.choiceIcon, { backgroundColor: '#fef3c7' }]}>
-                    <Building2 color="#f59e0b" size={26} />
-                  </View>
-                  <Text style={styles.choiceTitle}>Membre Administratif</Text>
-                  <Text style={styles.choiceDescription}>
-                    Membre de l'administration de l'association
-                  </Text>
-                </TouchableOpacity>
+                  Retour à la connexion
+                </Button>
               </View>
-            )}
-
-            {/* Indicateur de progression - Affiché seulement si type sélectionné */}
-            {userType && totalSteps > 0 && (
-              <View style={styles.progressContainer}>
-                {Array.from({ length: totalSteps }).map((_, index) => (
-                  <React.Fragment key={index}>
-                    <View
-                      style={[
-                        styles.progressDot,
-                        currentStep >= index + 1 && styles.progressDotActive
-                      ]}
-                    />
-                    {index < totalSteps - 1 && (
-                      <View
-                        style={[
-                          styles.progressLine,
-                          currentStep > index + 1 && styles.progressLineActive
-                        ]}
-                      />
-                    )}
-                  </React.Fragment>
-                ))}
-              </View>
-            )}
-
-            {/* ===== INSCRIPTION CADET ===== */}
-            {userType === 'cadet' && (
+            ) : (
               <>
-                {/* Étape 1 Cadet : Informations personnelles */}
-                {currentStep === 1 && (
-                  <View style={styles.stepContainer}>
-                    <Text style={styles.stepTitle}>Vos informations</Text>
+                <Text style={styles.title}>Inscription</Text>
 
-                    <View style={styles.row}>
-                      <View style={styles.halfWidth}>
-                        <Input
-                          label="Prénom *"
-                          placeholder="Prénom"
-                          value={signData.firstname}
-                          onChangeText={(text) => setSignData({ ...signData, firstname: text })}
-                        />
+                {/* Étape 0 : Choix du type */}
+                {currentStep === 0 && (
+                  <View style={styles.choiceContainer}>
+                    <Text style={styles.subtitle}>Je suis...</Text>
+
+                    <TouchableOpacity
+                      style={styles.choiceCard}
+                      onPress={() => handleSelectUserType('cadet')}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.choiceIcon, { backgroundColor: '#dbeafe' }]}>
+                        <UserIcon color="#2563eb" size={26} />
                       </View>
-                      <View style={styles.halfWidth}>
-                        <Input
-                          label="Nom *"
-                          placeholder="Nom"
-                          value={signData.lastname}
-                          onChangeText={(text) => setSignData({ ...signData, lastname: text })}
-                        />
+                      <Text style={styles.choiceTitle}>Un Cadet</Text>
+                      <Text style={styles.choiceDescription}>
+                        Rejoindre une association en tant que cadet
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.choiceCard}
+                      onPress={() => handleSelectUserType('organization')}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.choiceIcon, { backgroundColor: '#dcfce7' }]}>
+                        <Users color="#10b981" size={26} />
                       </View>
-                    </View>
+                      <Text style={styles.choiceTitle}>Une Association</Text>
+                      <Text style={styles.choiceDescription}>
+                        Créer un espace pour mon association
+                      </Text>
+                    </TouchableOpacity>
 
-                    <View style={{ marginBottom: 16 }}>
-                      <Text style={styles.label}>Date de naissance *</Text>
-                      <View style={styles.datePickerContainer}>
-                        <Calendar color="#94a3b8" size={20} />
-                        <DatePickerWrapper
-                          value={signData.dateOfbirth}
-                          onChange={(date) => setSignData({ ...signData, dateOfbirth: date })}
-                          placeholder="Date de naissance"
-                          style={styles.datePickerInput}
-                        />
+                    <TouchableOpacity
+                      style={styles.choiceCard}
+                      onPress={() => handleSelectUserType('admin_member')}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.choiceIcon, { backgroundColor: '#fef3c7' }]}>
+                        <Building2 color="#f59e0b" size={26} />
                       </View>
-                    </View>
-
-                    <Input
-                      label="Code postal *"
-                      placeholder="Ex: 80000"
-                      value={signData.postalCode}
-                      onChangeText={(text) => handlePostalCodeChange(text, false)}
-                      keyboardType="number-pad"
-                      maxLength={5}
-                      leftIcon={<MapPin color="#94a3b8" size={20} />}
-                    />
-
-                    {departmentInfo && (
-                      <View style={styles.departmentInfo}>
-                        <Text style={styles.departmentLabel}>📍 Département détecté :</Text>
-                        <Text style={styles.departmentText}>
-                          {departmentInfo.name} ({departmentInfo.code})
-                        </Text>
-                        <Text style={styles.regionText}>{departmentInfo.region}</Text>
-                      </View>
-                    )}
-
-                    <View style={styles.buttonRow}>
-                      <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
-                        Retour
-                      </Button>
-                      <Button onPress={handleNext} style={styles.halfButton}>
-                        Suivant
-                      </Button>
-                    </View>
+                      <Text style={styles.choiceTitle}>Membre Administratif</Text>
+                      <Text style={styles.choiceDescription}>
+                        Membre de l'administration de l'association
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 )}
 
-                {/* Étape 2 Cadet : Informations complémentaires */}
-                {currentStep === 2 && (
-                  <View style={styles.stepContainer}>
-                    <Text style={styles.stepTitle}>Informations complémentaires</Text>
-
-                    <Input
-                      label="Email *"
-                      placeholder="votre@email.com"
-                      value={signData.email}
-                      onChangeText={(text) => setSignData({ ...signData, email: text })}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      leftIcon={<Mail color="#94a3b8" size={20} />}
-                    />
-
-                    <Input
-                      label="Email du parent *"
-                      placeholder="parent@email.com"
-                      value={signData.emailParent}
-                      onChangeText={(text) => setSignData({ ...signData, emailParent: text })}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      leftIcon={<Mail color="#94a3b8" size={20} />}
-                    />
-
-                    <View style={{ marginBottom: 16 }}>
-                      <Text style={styles.label}>Sexe *</Text>
-                      <View style={styles.genderContainer}>
-                        <TouchableOpacity
+                {/* Indicateur de progression - Affiché seulement si type sélectionné */}
+                {userType && totalSteps > 0 && (
+                  <View style={styles.progressContainer}>
+                    {Array.from({ length: totalSteps }).map((_, index) => (
+                      <React.Fragment key={index}>
+                        <View
                           style={[
-                            styles.genderButton,
-                            signData.sexe === 0 && styles.genderButtonActive
+                            styles.progressDot,
+                            currentStep >= index + 1 && styles.progressDotActive
                           ]}
-                          onPress={() => setSignData({ ...signData, sexe: 0 })}
-                        >
-                          <Text style={[
-                            styles.genderText,
-                            signData.sexe === 0 && styles.genderTextActive
-                          ]}>
-                            Masculin
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.genderButton,
-                            signData.sexe === 1 && styles.genderButtonActive
-                          ]}
-                          onPress={() => setSignData({ ...signData, sexe: 1 })}
-                        >
-                          <Text style={[
-                            styles.genderText,
-                            signData.sexe === 1 && styles.genderTextActive
-                          ]}>
-                            Féminin
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
-                    <Input
-                      label="Mot de passe *"
-                      placeholder="••••••••"
-                      value={signData.password}
-                      onChangeText={(text) => setSignData({ ...signData, password: text })}
-                      secureTextEntry
-                      leftIcon={<Lock color="#94a3b8" size={20} />}
-                    />
-
-                    <View style={styles.buttonRow}>
-                      <Button
-                        variant="outline"
-                        onPress={handlePrevious}
-                        style={styles.halfButton}
-                        disabled={isLoading}
-                      >
-                        Précédent
-                      </Button>
-                      <Button
-                        onPress={handleSign}
-                        style={styles.halfButton}
-                        disabled={isLoading}
-                      >
-                        {isLoading ? (
-                          <ActivityIndicator color="#fff" size="small" />
-                        ) : (
-                          'S\'inscrire'
+                        />
+                        {index < totalSteps - 1 && (
+                          <View
+                            style={[
+                              styles.progressLine,
+                              currentStep > index + 1 && styles.progressLineActive
+                            ]}
+                          />
                         )}
-                      </Button>
-                    </View>
+                      </React.Fragment>
+                    ))}
                   </View>
                 )}
-              </>
-            )}
 
-            {/* ===== INSCRIPTION ORGANISATION ===== */}
-            {userType === 'organization' && (
-              <>
-                {/* Étape 1 Org : Informations association */}
-                {currentStep === 1 && (
-                  <View style={styles.stepContainer}>
-                    <Text style={styles.stepTitle}>Informations de l'association</Text>
+                {/* ===== INSCRIPTION CADET ===== */}
+                {userType === 'cadet' && (
+                  <>
+                    {/* Étape 1 Cadet : Informations personnelles */}
+                    {currentStep === 1 && (
+                      <View style={styles.stepContainer}>
+                        <Text style={styles.stepTitle}>Vos informations</Text>
 
-                    <Input
-                      label="Nom de l'association *"
-                      placeholder="Ex: Cadet de la Somme"
-                      value={orgData.organizationName}
-                      onChangeText={(text) => setOrgData({ ...orgData, organizationName: text })}
-                      leftIcon={<Building2 color="#94a3b8" size={20} />}
-                    />
+                        <View style={styles.row}>
+                          <View style={styles.halfWidth}>
+                            <Input
+                              label="Prénom *"
+                              placeholder="Prénom"
+                              value={signData.firstname}
+                              onChangeText={(text) => setSignData({ ...signData, firstname: text })}
+                            />
+                          </View>
+                          <View style={styles.halfWidth}>
+                            <Input
+                              label="Nom *"
+                              placeholder="Nom"
+                              value={signData.lastname}
+                              onChangeText={(text) => setSignData({ ...signData, lastname: text })}
+                            />
+                          </View>
+                        </View>
 
-                    <View style={styles.row}>
-                      <View style={styles.halfWidth}>
-                        <Input
-                          label="SIRET (optionnel)"
-                          placeholder="14 chiffres"
-                          value={orgData.siret}
-                          onChangeText={(text) => setOrgData({ ...orgData, siret: text.replace(/\D/g, '') })}
-                          keyboardType="number-pad"
-                          maxLength={14}
-                        />
-                      </View>
-                      <View style={styles.halfWidth}>
-                        <Input
-                          label="RNA (optionnel)"
-                          placeholder="W123456789"
-                          value={orgData.rna}
-                          onChangeText={(text) => setOrgData({ ...orgData, rna: text.toUpperCase() })}
-                          autoCapitalize="characters"
-                          maxLength={10}
-                        />
-                      </View>
-                    </View>
+                        <View style={{ marginBottom: 16 }}>
+                          <Text style={styles.label}>Date de naissance *</Text>
+                          <View style={styles.datePickerContainer}>
+                            <Calendar color="#94a3b8" size={20} />
+                            <DatePickerWrapper
+                              value={signData.dateOfbirth}
+                              onChange={(date) => setSignData({ ...signData, dateOfbirth: date })}
+                              placeholder="Date de naissance"
+                              style={styles.datePickerInput}
+                            />
+                          </View>
+                        </View>
 
-                    <Input
-                      label="Adresse (optionnel)"
-                      placeholder="Ex: 12 rue de la République"
-                      value={orgData.address}
-                      onChangeText={(text) => setOrgData({ ...orgData, address: text })}
-                      leftIcon={<MapPin color="#94a3b8" size={20} />}
-                    />
-
-                    <View style={styles.row}>
-                      <View style={styles.halfWidth}>
                         <Input
                           label="Code postal *"
                           placeholder="Ex: 80000"
-                          value={orgData.postalCode}
-                          onChangeText={(text) => handlePostalCodeChange(text, true)}
+                          value={signData.postalCode}
+                          onChangeText={(text) => handlePostalCodeChange(text, false)}
                           keyboardType="number-pad"
                           maxLength={5}
                           leftIcon={<MapPin color="#94a3b8" size={20} />}
                         />
-                      </View>
-                      <View style={styles.halfWidth}>
-                        <Input
-                          label="Ville *"
-                          placeholder="Ex: Amiens"
-                          value={orgData.city}
-                          onChangeText={(text) => setOrgData({ ...orgData, city: text })}
-                        />
-                      </View>
-                    </View>
 
-                    {departmentInfo && (
-                      <View style={styles.departmentInfo}>
-                        <Text style={styles.departmentLabel}>📍 Département détecté :</Text>
-                        <Text style={styles.departmentText}>
-                          {departmentInfo.name} ({departmentInfo.code})
-                        </Text>
-                        <Text style={styles.regionText}>{departmentInfo.region}</Text>
-                      </View>
-                    )}
-
-                    <Input
-                      label="Pays *"
-                      placeholder="France"
-                      value={orgData.country}
-                      onChangeText={(text) => setOrgData({ ...orgData, country: text })}
-                    />
-
-                    <View style={styles.buttonRow}>
-                      <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
-                        Retour
-                      </Button>
-                      <Button onPress={handleNext} style={styles.halfButton}>
-                        Continuer
-                      </Button>
-                    </View>
-                  </View>
-                )}
-
-                {/* Étape 2 Org : Informations administrateur */}
-                {currentStep === 2 && (
-                  <View style={styles.stepContainer}>
-                    <Text style={styles.stepTitle}>Vos informations (Administrateur)</Text>
-
-                    <View style={styles.row}>
-                      <View style={styles.halfWidth}>
-                        <Input
-                          label="Prénom *"
-                          placeholder="Votre prénom"
-                          value={signData.firstname}
-                          onChangeText={(text) => setSignData({ ...signData, firstname: text })}
-                          leftIcon={<UserIcon color="#94a3b8" size={20} />}
-                        />
-                      </View>
-                      <View style={styles.halfWidth}>
-                        <Input
-                          label="Nom *"
-                          placeholder="Votre nom"
-                          value={signData.lastname}
-                          onChangeText={(text) => setSignData({ ...signData, lastname: text })}
-                        />
-                      </View>
-                    </View>
-
-                    <Input
-                      label="Email *"
-                      placeholder="votre@email.com"
-                      value={signData.email}
-                      onChangeText={(text) => setSignData({ ...signData, email: text })}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      leftIcon={<Mail color="#94a3b8" size={20} />}
-                    />
-
-                    <Input
-                      label="Mot de passe *"
-                      placeholder="••••••••"
-                      value={signData.password}
-                      onChangeText={(text) => setSignData({ ...signData, password: text })}
-                      secureTextEntry
-                      leftIcon={<Lock color="#94a3b8" size={20} />}
-                    />
-                    <Text style={styles.hint}>Minimum 12 caractères (majuscule, minuscule, chiffre, caractère spécial)</Text>
-
-                    <Input
-                      label="Confirmer le mot de passe *"
-                      placeholder="••••••••"
-                      value={signData.confirmPassword}
-                      onChangeText={(text) => setSignData({ ...signData, confirmPassword: text })}
-                      secureTextEntry
-                      leftIcon={<Lock color="#94a3b8" size={20} />}
-                    />
-
-                    <View style={styles.buttonRow}>
-                      <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
-                        Précédent
-                      </Button>
-                      <Button onPress={handleNext} style={styles.halfButton}>
-                        Continuer
-                      </Button>
-                    </View>
-                  </View>
-                )}
-
-                {/* Étape 3 Org : Récapitulatif */}
-                {currentStep === 3 && (
-                  <View style={styles.stepContainer}>
-                    <Text style={styles.stepTitle}>Récapitulatif</Text>
-
-                    <View style={styles.summaryCard}>
-                      <Text style={styles.summaryTitle}>Association</Text>
-                      <Text style={styles.summaryText}>{orgData.organizationName}</Text>
-                      {orgData.siret && <Text style={styles.summaryLabel}>SIRET : {orgData.siret}</Text>}
-                      {orgData.rna && <Text style={styles.summaryLabel}>RNA : {orgData.rna}</Text>}
-                    </View>
-
-                    <View style={styles.summaryCard}>
-                      <Text style={styles.summaryTitle}>Localisation</Text>
-                      <Text style={styles.summaryText}>{orgData.city} ({orgData.postalCode})</Text>
-                      <Text style={styles.summaryLabel}>{orgData.country}</Text>
-                      {departmentInfo && (
-                        <Text style={styles.summaryLabel}>
-                          {departmentInfo.name} • {departmentInfo.region}
-                        </Text>
-                      )}
-                    </View>
-
-                    <View style={styles.summaryCard}>
-                      <Text style={styles.summaryTitle}>Administrateur</Text>
-                      <Text style={styles.summaryText}>
-                        {signData.firstname} {signData.lastname}
-                      </Text>
-                      <Text style={styles.summaryLabel}>{signData.email}</Text>
-                    </View>
-
-                    <View style={styles.infoBox}>
-                      <Text style={styles.infoText}>
-                        🎉 Profitez de 14 jours d'essai gratuit avec accès à toutes les fonctionnalités !
-                      </Text>
-                    </View>
-
-                    <View style={styles.buttonRow}>
-                      <Button
-                        variant="outline"
-                        onPress={handlePrevious}
-                        style={styles.halfButton}
-                        disabled={isLoading}
-                      >
-                        Retour
-                      </Button>
-                      <Button
-                        onPress={handleSign}
-                        style={styles.halfButton}
-                        disabled={isLoading}
-                      >
-                        {isLoading ? (
-                          <ActivityIndicator color="#fff" size="small" />
-                        ) : (
-                          'Créer mon espace'
-                        )}
-                      </Button>
-                    </View>
-                  </View>
-                )}
-              </>
-            )}
-
-            {/* ===== INSCRIPTION MEMBRE ADMINISTRATIF ===== */}
-            {userType === 'admin_member' && (
-              <>
-                {/* Étape 1 : Informations personnelles */}
-                {currentStep === 1 && (
-                  <View style={styles.stepContainer}>
-                    <Text style={styles.stepTitle}>Vos informations personnelles</Text>
-
-                    <View style={styles.row}>
-                      <View style={styles.halfWidth}>
-                        <Input
-                          label="Prénom *"
-                          placeholder="Prénom"
-                          value={signData.firstname}
-                          onChangeText={(text) => setSignData({ ...signData, firstname: text })}
-                        />
-                      </View>
-                      <View style={styles.halfWidth}>
-                        <Input
-                          label="Nom *"
-                          placeholder="Nom"
-                          value={signData.lastname}
-                          onChangeText={(text) => setSignData({ ...signData, lastname: text })}
-                        />
-                      </View>
-                    </View>
-
-                    <View style={{ marginBottom: 16 }}>
-                      <Text style={styles.label}>Date de naissance *</Text>
-                      <View style={styles.datePickerContainer}>
-                        <Calendar color="#94a3b8" size={20} />
-                        <DatePickerWrapper
-                          value={signData.dateOfbirth}
-                          onChange={(date) => setSignData({ ...signData, dateOfbirth: date })}
-                          placeholder="Date de naissance"
-                          style={styles.datePickerInput}
-                        />
-                      </View>
-                    </View>
-
-                    <View style={{ marginBottom: 16 }}>
-                      <Text style={styles.label}>Sexe *</Text>
-                      <View style={styles.genderContainer}>
-                        <TouchableOpacity
-                          style={[
-                            styles.genderButton,
-                            signData.sexe === 0 && styles.genderButtonActive
-                          ]}
-                          onPress={() => setSignData({ ...signData, sexe: 0 })}
-                        >
-                          <Text style={[
-                            styles.genderText,
-                            signData.sexe === 0 && styles.genderTextActive
-                          ]}>
-                            Masculin
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.genderButton,
-                            signData.sexe === 1 && styles.genderButtonActive
-                          ]}
-                          onPress={() => setSignData({ ...signData, sexe: 1 })}
-                        >
-                          <Text style={[
-                            styles.genderText,
-                            signData.sexe === 1 && styles.genderTextActive
-                          ]}>
-                            Féminin
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-
-                    <Input
-                      label="Téléphone *"
-                      placeholder="+33 6 12 34 56 78"
-                      value={signData.phone}
-                      onChangeText={(text) => setSignData({ ...signData, phone: text })}
-                      keyboardType="phone-pad"
-                    />
-
-                    <View style={styles.buttonRow}>
-                      <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
-                        Retour
-                      </Button>
-                      <Button onPress={handleNext} style={styles.halfButton}>
-                        Continuer
-                      </Button>
-                    </View>
-                  </View>
-                )}
-
-                {/* Étape 2 : Sélection de l'association */}
-                {currentStep === 2 && (
-                  <View style={styles.stepContainer}>
-                    <Text style={styles.stepTitle}>Sélection de l'association</Text>
-                    <Text style={styles.subtitle}>Choisissez votre association</Text>
-
-                    {associations.length === 0 ? (
-                      <View style={{ padding: 20, alignItems: 'center' }}>
-                        <Text style={{ color: '#64748b', textAlign: 'center' }}>
-                          Aucune association disponible pour le moment.
-                        </Text>
-                        <Text style={{ color: '#64748b', textAlign: 'center', marginTop: 8, fontSize: 12 }}>
-                          Contactez l'administrateur de votre association pour obtenir un lien d'inscription.
-                        </Text>
-                      </View>
-                    ) : (
-                      <>
-                        {associations.map((assoc) => (
-                          <TouchableOpacity
-                            key={assoc.id}
-                            style={[
-                              styles.roleCard,
-                              selectedAssociationId === assoc.id && styles.roleCardActive
-                            ]}
-                            onPress={() => {
-                              setSelectedAssociationId(assoc.id);
-                              // Définir automatiquement le code postal en fonction de l'association
-                              setSignData({ ...signData, postalCode: assoc.postalCode });
-                              // Vérifier le département
-                              if (isValidPostalCode(assoc.postalCode)) {
-                                const department = getDepartmentFromPostalCode(assoc.postalCode);
-                                setDepartmentInfo(department);
-                              }
-                            }}
-                          >
-                            <View style={styles.roleHeader}>
-                              <Text style={[
-                                styles.roleTitle,
-                                selectedAssociationId === assoc.id && styles.roleTextActive
-                              ]}>
-                                {assoc.name}
-                              </Text>
-                              {selectedAssociationId === assoc.id && (
-                                <View style={styles.checkmark}>
-                                  <Text style={styles.checkmarkText}>✓</Text>
-                                </View>
-                              )}
-                            </View>
-                            <Text style={styles.roleDescription}>
-                              {assoc.postalCode}
+                        {departmentInfo && (
+                          <View style={styles.departmentInfo}>
+                            <Text style={styles.departmentLabel}>📍 Département détecté :</Text>
+                            <Text style={styles.departmentText}>
+                              {departmentInfo.name} ({departmentInfo.code})
                             </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </>
+                            <Text style={styles.regionText}>{departmentInfo.region}</Text>
+                          </View>
+                        )}
+
+                        <View style={styles.buttonRow}>
+                          <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
+                            Retour
+                          </Button>
+                          <Button onPress={handleNext} style={styles.halfButton}>
+                            Suivant
+                          </Button>
+                        </View>
+                      </View>
                     )}
 
-                    <View style={styles.buttonRow}>
-                      <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
-                        Précédent
-                      </Button>
-                      <Button
-                        onPress={handleNext}
-                        style={styles.halfButton}
-                        disabled={!selectedAssociationId}
-                      >
-                        Continuer
-                      </Button>
-                    </View>
-                  </View>
+                    {/* Étape 2 Cadet : Informations complémentaires */}
+                    {currentStep === 2 && (
+                      <View style={styles.stepContainer}>
+                        <Text style={styles.stepTitle}>Informations complémentaires</Text>
+
+                        <Input
+                          label="Email *"
+                          placeholder="votre@email.com"
+                          value={signData.email}
+                          onChangeText={(text) => setSignData({ ...signData, email: text })}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          leftIcon={<Mail color="#94a3b8" size={20} />}
+                        />
+
+                        <Input
+                          label="Email du parent *"
+                          placeholder="parent@email.com"
+                          value={signData.emailParent}
+                          onChangeText={(text) => setSignData({ ...signData, emailParent: text })}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          leftIcon={<Mail color="#94a3b8" size={20} />}
+                        />
+
+                        <View style={{ marginBottom: 16 }}>
+                          <Text style={styles.label}>Sexe *</Text>
+                          <View style={styles.genderContainer}>
+                            <TouchableOpacity
+                              style={[
+                                styles.genderButton,
+                                signData.sexe === 0 && styles.genderButtonActive
+                              ]}
+                              onPress={() => setSignData({ ...signData, sexe: 0 })}
+                            >
+                              <Text style={[
+                                styles.genderText,
+                                signData.sexe === 0 && styles.genderTextActive
+                              ]}>
+                                Masculin
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[
+                                styles.genderButton,
+                                signData.sexe === 1 && styles.genderButtonActive
+                              ]}
+                              onPress={() => setSignData({ ...signData, sexe: 1 })}
+                            >
+                              <Text style={[
+                                styles.genderText,
+                                signData.sexe === 1 && styles.genderTextActive
+                              ]}>
+                                Féminin
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        <Input
+                          label="Mot de passe *"
+                          placeholder="••••••••"
+                          value={signData.password}
+                          onChangeText={(text) => setSignData({ ...signData, password: text })}
+                          secureTextEntry
+                          leftIcon={<Lock color="#94a3b8" size={20} />}
+                        />
+
+                        <View style={styles.buttonRow}>
+                          <Button
+                            variant="outline"
+                            onPress={handlePrevious}
+                            style={styles.halfButton}
+                            disabled={isLoading}
+                          >
+                            Précédent
+                          </Button>
+                          <Button
+                            onPress={handleSign}
+                            style={styles.halfButton}
+                            disabled={isLoading}
+                          >
+                            {isLoading ? (
+                              <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                              'S\'inscrire'
+                            )}
+                          </Button>
+                        </View>
+                      </View>
+                    )}
+                  </>
                 )}
 
-                {/* Étape 3 : Choix du rôle */}
-                {currentStep === 3 && (
-                  <View style={styles.stepContainer}>
-                    <Text style={styles.stepTitle}>Votre rôle dans l'association</Text>
-                    <Text style={styles.subtitle}>Sélectionnez votre fonction</Text>
+                {/* ===== INSCRIPTION ORGANISATION ===== */}
+                {userType === 'organization' && (
+                  <>
+                    {/* Étape 1 Org : Informations association */}
+                    {currentStep === 1 && (
+                      <View style={styles.stepContainer}>
+                        <Text style={styles.stepTitle}>Informations de l'association</Text>
 
-                    {availableRoles.length === 0 ? (
-                      <View style={{ padding: 20, alignItems: 'center' }}>
-                        <ActivityIndicator size="large" color="#3b82f6" />
-                        <Text style={{ color: '#64748b', textAlign: 'center', marginTop: 12 }}>
-                          Chargement des rôles...
-                        </Text>
+                        <Input
+                          label="Nom de l'association *"
+                          placeholder="Ex: Cadet de la Somme"
+                          value={orgData.organizationName}
+                          onChangeText={(text) => setOrgData({ ...orgData, organizationName: text })}
+                          leftIcon={<Building2 color="#94a3b8" size={20} />}
+                        />
+
+                        <View style={styles.row}>
+                          <View style={styles.halfWidth}>
+                            <Input
+                              label="SIRET (optionnel)"
+                              placeholder="14 chiffres"
+                              value={orgData.siret || ''}
+                              onChangeText={(text) => setOrgData({ ...orgData, siret: text.replace(/\D/g, '') || null })}
+                              keyboardType="number-pad"
+                              maxLength={14}
+                            />
+                          </View>
+                          <View style={styles.halfWidth}>
+                            <Input
+                              label="RNA (optionnel)"
+                              placeholder="W123456789"
+                              value={orgData.rna || ''}
+                              onChangeText={(text) => setOrgData({ ...orgData, rna: text.trim() === '' ? null : text.toUpperCase() })}
+                              autoCapitalize="characters"
+                              maxLength={10}
+                            />
+                          </View>
+                        </View>
+
+                        <Input
+                          label="Adresse (optionnel)"
+                          placeholder="Ex: 12 rue de la République"
+                          value={orgData.address || ''}
+                          onChangeText={(text) => setOrgData({ ...orgData, address: text.trim() === '' ? null : text })}
+                          leftIcon={<MapPin color="#94a3b8" size={20} />}
+                        />
+
+                        <View style={styles.row}>
+                          <View style={styles.halfWidth}>
+                            <Input
+                              label="Code postal *"
+                              placeholder="Ex: 80000"
+                              value={orgData.postalCode}
+                              onChangeText={(text) => handlePostalCodeChange(text, true)}
+                              keyboardType="number-pad"
+                              maxLength={5}
+                              leftIcon={<MapPin color="#94a3b8" size={20} />}
+                            />
+                          </View>
+                          <View style={styles.halfWidth}>
+                            <Input
+                              label="Ville *"
+                              placeholder="Ex: Amiens"
+                              value={orgData.city}
+                              onChangeText={(text) => setOrgData({ ...orgData, city: text })}
+                            />
+                          </View>
+                        </View>
+
+                        {departmentInfo && (
+                          <View style={styles.departmentInfo}>
+                            <Text style={styles.departmentLabel}>📍 Département détecté :</Text>
+                            <Text style={styles.departmentText}>
+                              {departmentInfo.name} ({departmentInfo.code})
+                            </Text>
+                            <Text style={styles.regionText}>{departmentInfo.region}</Text>
+                          </View>
+                        )}
+
+                        <Input
+                          label="Pays *"
+                          placeholder="France"
+                          value={orgData.country}
+                          onChangeText={(text) => setOrgData({ ...orgData, country: text })}
+                        />
+
+                        <View style={styles.buttonRow}>
+                          <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
+                            Retour
+                          </Button>
+                          <Button onPress={handleNext} style={styles.halfButton}>
+                            Continuer
+                          </Button>
+                        </View>
                       </View>
-                    ) : (
-                      <>
-                        {availableRoles
-                          .filter(role => !occupiedRoleNames.includes(role.name))
-                          .map((role) => {
-                            // Descriptions des rôles
-                            const roleDescriptions: Record<string, string> = {
-                              'president': 'Direction de l\'association et gestion globale',
-                              'directeur_formation': 'Responsable de la formation et de l\'encadrement des cadets',
-                              'tresorier': 'Gestion comptable et accès aux documents financiers',
-                              'formateur': 'Gestion des cadets et accès aux cours et documents de formation',
-                            };
+                    )}
 
-                            return (
+                    {/* Étape 2 Org : Informations administrateur */}
+                    {currentStep === 2 && (
+                      <View style={styles.stepContainer}>
+                        <Text style={styles.stepTitle}>Vos informations (Administrateur)</Text>
+
+                        <View style={styles.row}>
+                          <View style={styles.halfWidth}>
+                            <Input
+                              label="Prénom *"
+                              placeholder="Votre prénom"
+                              value={signData.firstname}
+                              onChangeText={(text) => setSignData({ ...signData, firstname: text })}
+                              leftIcon={<UserIcon color="#94a3b8" size={20} />}
+                            />
+                          </View>
+                          <View style={styles.halfWidth}>
+                            <Input
+                              label="Nom *"
+                              placeholder="Votre nom"
+                              value={signData.lastname}
+                              onChangeText={(text) => setSignData({ ...signData, lastname: text })}
+                            />
+                          </View>
+                        </View>
+
+                        <Input
+                          label="Email *"
+                          placeholder="votre@email.com"
+                          value={signData.email}
+                          onChangeText={(text) => setSignData({ ...signData, email: text })}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          leftIcon={<Mail color="#94a3b8" size={20} />}
+                        />
+
+                        <Input
+                          label="Mot de passe *"
+                          placeholder="••••••••"
+                          value={signData.password}
+                          onChangeText={(text) => setSignData({ ...signData, password: text })}
+                          secureTextEntry
+                          leftIcon={<Lock color="#94a3b8" size={20} />}
+                        />
+                        <Text style={styles.hint}>Minimum 12 caractères (majuscule, minuscule, chiffre, caractère spécial)</Text>
+
+                        <Input
+                          label="Confirmer le mot de passe *"
+                          placeholder="••••••••"
+                          value={signData.confirmPassword}
+                          onChangeText={(text) => setSignData({ ...signData, confirmPassword: text })}
+                          secureTextEntry
+                          leftIcon={<Lock color="#94a3b8" size={20} />}
+                        />
+
+                        <View style={styles.buttonRow}>
+                          <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
+                            Précédent
+                          </Button>
+                          <Button onPress={handleNext} style={styles.halfButton}>
+                            Continuer
+                          </Button>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Étape 3 Org : Récapitulatif */}
+                    {currentStep === 3 && (
+                      <View style={styles.stepContainer}>
+                        <Text style={styles.stepTitle}>Récapitulatif</Text>
+
+                        <View style={styles.summaryCard}>
+                          <Text style={styles.summaryTitle}>Association</Text>
+                          <Text style={styles.summaryText}>{orgData.organizationName}</Text>
+                          {orgData.siret && <Text style={styles.summaryLabel}>SIRET : {orgData.siret}</Text>}
+                          {orgData.rna && <Text style={styles.summaryLabel}>RNA : {orgData.rna}</Text>}
+                        </View>
+
+                        <View style={styles.summaryCard}>
+                          <Text style={styles.summaryTitle}>Localisation</Text>
+                          <Text style={styles.summaryText}>{orgData.city} ({orgData.postalCode})</Text>
+                          <Text style={styles.summaryLabel}>{orgData.country}</Text>
+                          {departmentInfo && (
+                            <Text style={styles.summaryLabel}>
+                              {departmentInfo.name} • {departmentInfo.region}
+                            </Text>
+                          )}
+                        </View>
+
+                        <View style={styles.summaryCard}>
+                          <Text style={styles.summaryTitle}>Administrateur</Text>
+                          <Text style={styles.summaryText}>
+                            {signData.firstname} {signData.lastname}
+                          </Text>
+                          <Text style={styles.summaryLabel}>{signData.email}</Text>
+                        </View>
+
+                        <View style={styles.infoBox}>
+                          <Text style={styles.infoText}>
+                            🎉 Profitez de 14 jours d'essai gratuit avec accès à toutes les fonctionnalités !
+                          </Text>
+                        </View>
+
+                        <View style={styles.buttonRow}>
+                          <Button
+                            variant="outline"
+                            onPress={handlePrevious}
+                            style={styles.halfButton}
+                            disabled={isLoading}
+                          >
+                            Retour
+                          </Button>
+                          <Button
+                            onPress={handleSign}
+                            style={styles.halfButton}
+                            disabled={isLoading}
+                          >
+                            {isLoading ? (
+                              <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                              'Créer mon espace'
+                            )}
+                          </Button>
+                        </View>
+                      </View>
+                    )}
+                  </>
+                )}
+
+                {/* ===== INSCRIPTION MEMBRE ADMINISTRATIF ===== */}
+                {userType === 'admin_member' && (
+                  <>
+                    {/* Étape 1 : Informations personnelles */}
+                    {currentStep === 1 && (
+                      <View style={styles.stepContainer}>
+                        <Text style={styles.stepTitle}>Vos informations personnelles</Text>
+
+                        <View style={styles.row}>
+                          <View style={styles.halfWidth}>
+                            <Input
+                              label="Prénom *"
+                              placeholder="Prénom"
+                              value={signData.firstname}
+                              onChangeText={(text) => setSignData({ ...signData, firstname: text })}
+                            />
+                          </View>
+                          <View style={styles.halfWidth}>
+                            <Input
+                              label="Nom *"
+                              placeholder="Nom"
+                              value={signData.lastname}
+                              onChangeText={(text) => setSignData({ ...signData, lastname: text })}
+                            />
+                          </View>
+                        </View>
+
+                        <View style={{ marginBottom: 16 }}>
+                          <Text style={styles.label}>Date de naissance *</Text>
+                          <View style={styles.datePickerContainer}>
+                            <Calendar color="#94a3b8" size={20} />
+                            <DatePickerWrapper
+                              value={signData.dateOfbirth}
+                              onChange={(date) => setSignData({ ...signData, dateOfbirth: date })}
+                              placeholder="Date de naissance"
+                              style={styles.datePickerInput}
+                            />
+                          </View>
+                        </View>
+
+                        <View style={{ marginBottom: 16 }}>
+                          <Text style={styles.label}>Sexe *</Text>
+                          <View style={styles.genderContainer}>
+                            <TouchableOpacity
+                              style={[
+                                styles.genderButton,
+                                signData.sexe === 0 && styles.genderButtonActive
+                              ]}
+                              onPress={() => setSignData({ ...signData, sexe: 0 })}
+                            >
+                              <Text style={[
+                                styles.genderText,
+                                signData.sexe === 0 && styles.genderTextActive
+                              ]}>
+                                Masculin
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[
+                                styles.genderButton,
+                                signData.sexe === 1 && styles.genderButtonActive
+                              ]}
+                              onPress={() => setSignData({ ...signData, sexe: 1 })}
+                            >
+                              <Text style={[
+                                styles.genderText,
+                                signData.sexe === 1 && styles.genderTextActive
+                              ]}>
+                                Féminin
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        <Input
+                          label="Téléphone *"
+                          placeholder="+33 6 12 34 56 78"
+                          value={signData.phone}
+                          onChangeText={(text) => setSignData({ ...signData, phone: text })}
+                          keyboardType="phone-pad"
+                        />
+
+                        <View style={styles.buttonRow}>
+                          <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
+                            Retour
+                          </Button>
+                          <Button onPress={handleNext} style={styles.halfButton}>
+                            Continuer
+                          </Button>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Étape 2 : Sélection de l'association */}
+                    {currentStep === 2 && (
+                      <View style={styles.stepContainer}>
+                        <Text style={styles.stepTitle}>Sélection de l'association</Text>
+                        <Text style={styles.subtitle}>Choisissez votre association</Text>
+
+                        {associations.length === 0 ? (
+                          <View style={{ padding: 20, alignItems: 'center' }}>
+                            <Text style={{ color: '#64748b', textAlign: 'center' }}>
+                              Aucune association disponible pour le moment.
+                            </Text>
+                            <Text style={{ color: '#64748b', textAlign: 'center', marginTop: 8, fontSize: 12 }}>
+                              Contactez l'administrateur de votre association pour obtenir un lien d'inscription.
+                            </Text>
+                          </View>
+                        ) : (
+                          <>
+                            {associations.map((assoc) => (
                               <TouchableOpacity
-                                key={role.id}
+                                key={assoc.id}
                                 style={[
                                   styles.roleCard,
-                                  selectedRoleId === role.id && styles.roleCardActive
+                                  selectedAssociationId === assoc.id && styles.roleCardActive
                                 ]}
-                                onPress={() => setSelectedRoleId(role.id)}
+                                onPress={() => {
+                                  setSelectedAssociationId(assoc.id);
+                                  // Définir automatiquement le code postal en fonction de l'association
+                                  setSignData({ ...signData, postalCode: assoc.postalCode });
+                                  // Vérifier le département
+                                  if (isValidPostalCode(assoc.postalCode)) {
+                                    const department = getDepartmentFromPostalCode(assoc.postalCode);
+                                    setDepartmentInfo(department);
+                                  }
+                                }}
                               >
                                 <View style={styles.roleHeader}>
                                   <Text style={[
                                     styles.roleTitle,
-                                    selectedRoleId === role.id && styles.roleTextActive
+                                    selectedAssociationId === assoc.id && styles.roleTextActive
                                   ]}>
-                                    {role.displayName}
+                                    {assoc.name}
                                   </Text>
-                                  {selectedRoleId === role.id && (
+                                  {selectedAssociationId === assoc.id && (
                                     <View style={styles.checkmark}>
                                       <Text style={styles.checkmarkText}>✓</Text>
                                     </View>
                                   )}
                                 </View>
                                 <Text style={styles.roleDescription}>
-                                  {roleDescriptions[role.name] || role.description || 'Aucune description disponible'}
+                                  {assoc.postalCode}
                                 </Text>
                               </TouchableOpacity>
-                            );
-                          })}
-                      </>
+                            ))}
+                          </>
+                        )}
+
+                        <View style={styles.buttonRow}>
+                          <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
+                            Précédent
+                          </Button>
+                          <Button
+                            onPress={handleNext}
+                            style={styles.halfButton}
+                            disabled={!selectedAssociationId}
+                          >
+                            Continuer
+                          </Button>
+                        </View>
+                      </View>
                     )}
 
-                    <View style={styles.buttonRow}>
-                      <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
-                        Précédent
-                      </Button>
-                      <Button
-                        onPress={handleNext}
-                        style={styles.halfButton}
-                        disabled={!selectedRoleId}
-                      >
-                        Continuer
-                      </Button>
-                    </View>
-                  </View>
-                )}
+                    {/* Étape 3 : Choix du rôle */}
+                    {currentStep === 3 && (
+                      <View style={styles.stepContainer}>
+                        <Text style={styles.stepTitle}>Votre rôle dans l'association</Text>
+                        <Text style={styles.subtitle}>Sélectionnez votre fonction</Text>
 
-                {/* Étape 4 : Création du compte */}
-                {currentStep === 4 && (
-                  <View style={styles.stepContainer}>
-                    <Text style={styles.stepTitle}>Création du compte</Text>
-
-                    <Input
-                      label="Email *"
-                      placeholder="votre.email@exemple.fr"
-                      value={signData.email}
-                      onChangeText={(text) => setSignData({ ...signData, email: text })}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      leftIcon={<Mail color="#94a3b8" size={20} />}
-                    />
-
-                    <Input
-                      label="Mot de passe *"
-                      placeholder="••••••••"
-                      value={signData.password}
-                      onChangeText={(text) => setSignData({ ...signData, password: text })}
-                      secureTextEntry
-                      leftIcon={<Lock color="#94a3b8" size={20} />}
-                    />
-
-                    <Input
-                      label="Confirmer le mot de passe *"
-                      placeholder="••••••••"
-                      value={signData.confirmPassword}
-                      onChangeText={(text) => setSignData({ ...signData, confirmPassword: text })}
-                      secureTextEntry
-                      leftIcon={<Lock color="#94a3b8" size={20} />}
-                    />
-
-                    <View style={styles.summaryCard}>
-                      <Text style={styles.summaryTitle}>Récapitulatif</Text>
-                      <Text style={styles.summaryText}>
-                        {signData.firstname} {signData.lastname}
-                      </Text>
-                      <Text style={styles.summaryLabel}>
-                        Rôle : {availableRoles.find(r => r.id === selectedRoleId)?.displayName || 'Non sélectionné'}
-                      </Text>
-                      <Text style={styles.summaryLabel}>Association : {associations.find(a => a.id === selectedAssociationId)?.name || 'Non sélectionnée'}</Text>
-                      <Text style={styles.summaryLabel}>{signData.email}</Text>
-                    </View>
-
-                    <View style={styles.buttonRow}>
-                      <Button
-                        variant="outline"
-                        onPress={handlePrevious}
-                        style={styles.halfButton}
-                        disabled={isLoading}
-                      >
-                        Précédent
-                      </Button>
-                      <Button
-                        onPress={handleSign}
-                        style={styles.halfButton}
-                        disabled={isLoading}
-                      >
-                        {isLoading ? (
-                          <ActivityIndicator color="#fff" size="small" />
+                        {availableRoles.length === 0 ? (
+                          <View style={{ padding: 20, alignItems: 'center' }}>
+                            <ActivityIndicator size="large" color="#3b82f6" />
+                            <Text style={{ color: '#64748b', textAlign: 'center', marginTop: 12 }}>
+                              Chargement des rôles...
+                            </Text>
+                          </View>
                         ) : (
-                          'S\'inscrire'
+                          <>
+                            {availableRoles
+                              .filter(role => !occupiedRoleNames.includes(role.name))
+                              .map((role) => {
+                                // Descriptions des rôles
+                                const roleDescriptions: Record<string, string> = {
+                                  'president': 'Direction de l\'association et gestion globale',
+                                  'directeur_formation': 'Responsable de la formation et de l\'encadrement des cadets',
+                                  'tresorier': 'Gestion comptable et accès aux documents financiers',
+                                  'formateur': 'Gestion des cadets et accès aux cours et documents de formation',
+                                };
+
+                                return (
+                                  <TouchableOpacity
+                                    key={role.id}
+                                    style={[
+                                      styles.roleCard,
+                                      selectedRoleId === role.id && styles.roleCardActive
+                                    ]}
+                                    onPress={() => setSelectedRoleId(role.id)}
+                                  >
+                                    <View style={styles.roleHeader}>
+                                      <Text style={[
+                                        styles.roleTitle,
+                                        selectedRoleId === role.id && styles.roleTextActive
+                                      ]}>
+                                        {role.displayName}
+                                      </Text>
+                                      {selectedRoleId === role.id && (
+                                        <View style={styles.checkmark}>
+                                          <Text style={styles.checkmarkText}>✓</Text>
+                                        </View>
+                                      )}
+                                    </View>
+                                    <Text style={styles.roleDescription}>
+                                      {roleDescriptions[role.name] || role.description || 'Aucune description disponible'}
+                                    </Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                          </>
                         )}
-                      </Button>
-                    </View>
-                  </View>
+
+                        <View style={styles.buttonRow}>
+                          <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
+                            Précédent
+                          </Button>
+                          <Button
+                            onPress={handleNext}
+                            style={styles.halfButton}
+                            disabled={!selectedRoleId}
+                          >
+                            Continuer
+                          </Button>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Étape 4 : Création du compte */}
+                    {currentStep === 4 && (
+                      <View style={styles.stepContainer}>
+                        <Text style={styles.stepTitle}>Création du compte</Text>
+
+                        <Input
+                          label="Email *"
+                          placeholder="votre.email@exemple.fr"
+                          value={signData.email}
+                          onChangeText={(text) => setSignData({ ...signData, email: text })}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          leftIcon={<Mail color="#94a3b8" size={20} />}
+                        />
+
+                        <Input
+                          label="Mot de passe *"
+                          placeholder="••••••••"
+                          value={signData.password}
+                          onChangeText={(text) => setSignData({ ...signData, password: text })}
+                          secureTextEntry
+                          leftIcon={<Lock color="#94a3b8" size={20} />}
+                        />
+
+                        <Input
+                          label="Confirmer le mot de passe *"
+                          placeholder="••••••••"
+                          value={signData.confirmPassword}
+                          onChangeText={(text) => setSignData({ ...signData, confirmPassword: text })}
+                          secureTextEntry
+                          leftIcon={<Lock color="#94a3b8" size={20} />}
+                        />
+
+                        <View style={styles.summaryCard}>
+                          <Text style={styles.summaryTitle}>Récapitulatif</Text>
+                          <Text style={styles.summaryText}>
+                            {signData.firstname} {signData.lastname}
+                          </Text>
+                          <Text style={styles.summaryLabel}>
+                            Rôle : {availableRoles.find(r => r.id === selectedRoleId)?.displayName || 'Non sélectionné'}
+                          </Text>
+                          <Text style={styles.summaryLabel}>Association : {associations.find(a => a.id === selectedAssociationId)?.name || 'Non sélectionnée'}</Text>
+                          <Text style={styles.summaryLabel}>{signData.email}</Text>
+                        </View>
+
+                        <View style={styles.buttonRow}>
+                          <Button
+                            variant="outline"
+                            onPress={handlePrevious}
+                            style={styles.halfButton}
+                            disabled={isLoading}
+                          >
+                            Précédent
+                          </Button>
+                          <Button
+                            onPress={handleSign}
+                            style={styles.halfButton}
+                            disabled={isLoading}
+                          >
+                            {isLoading ? (
+                              <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                              'S\'inscrire'
+                            )}
+                          </Button>
+                        </View>
+                      </View>
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -1520,5 +1532,34 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  successContainer: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+  },
+  successIconContainer: {
+    marginBottom: 24,
+  },
+  successIcon: {
+    fontSize: 64,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  successMessage: {
+    fontSize: 16,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  successButton: {
+    width: '100%',
+    maxWidth: 300,
   },
 });

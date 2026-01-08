@@ -18,11 +18,11 @@ import { getDepartmentFromPostalCode, isValidPostalCode, Department } from '../.
 interface OrganizationSignupData {
   organizationName: string;
   subdomain: string;
-  siren: string;
-  rna: string;
+  siren: string | null;
+  rna: string | null;
   postalCode: string;
   city: string;
-  address: string;
+  address: string | null;
   firstName: string;
   lastName: string;
   email: string;
@@ -42,11 +42,11 @@ export default function OrganizationSignupScreen({
   const [formData, setFormData] = useState<OrganizationSignupData>({
     organizationName: '',
     subdomain: '',
-    siren: '',
-    rna: '',
+    siren: null,
+    rna: null,
     postalCode: '',
     city: '',
-    address: '',
+    address: null,
     firstName: '',
     lastName: '',
     email: '',
@@ -54,6 +54,7 @@ export default function OrganizationSignupScreen({
   });
   const [loading, setLoading] = useState(false);
   const [departmentInfo, setDepartmentInfo] = useState<Department | null>(null);
+  const [showSuccessCard, setShowSuccessCard] = useState(false);
 
   // Gérer le changement de code postal et détecter le département
   const handlePostalCodeChange = (postalCode: string) => {
@@ -161,13 +162,8 @@ export default function OrganizationSignupScreen({
       // Simuler un délai
       await new Promise(resolve => setTimeout(resolve, 1500));
 
-      if (isWeb) {
-        alert('Inscription réussie ! Bienvenue sur CadetApp.');
-      } else {
-        Alert.alert('Succès', 'Inscription réussie ! Bienvenue sur CadetApp.');
-      }
-
-      onSignupSuccess();
+      // Afficher la card de confirmation
+      setShowSuccessCard(true);
     } catch (error: any) {
       Alert.alert('Erreur', error.message || 'Une erreur est survenue lors de l\'inscription');
     } finally {
@@ -211,12 +207,33 @@ export default function OrganizationSignupScreen({
       >
         <View style={styles.formContainer}>
           <View style={[styles.card, isWeb && styles.cardWeb]}>
-            <Text style={styles.title}>Créer votre espace</Text>
-            <Text style={styles.subtitle}>
-              {step === 1 && 'Informations de votre association'}
-              {step === 2 && 'Vos informations personnelles'}
-              {step === 3 && 'Récapitulatif'}
-            </Text>
+            {/* Card de succès */}
+            {showSuccessCard ? (
+              <View style={styles.successContainer}>
+                <View style={styles.successIconContainer}>
+                  <Text style={styles.successIcon}>✅</Text>
+                </View>
+                <Text style={styles.successTitle}>Inscription enregistrée !</Text>
+                <Text style={styles.successMessage}>
+                  Votre demande d'inscription a bien été enregistrée.{'\n\n'}
+                  ⏳ Un super administrateur va examiner votre demande.{'\n\n'}
+                  Vous recevrez un email de confirmation une fois votre association validée.
+                </Text>
+                <Button
+                  onPress={onNavigateToLogin}
+                  style={styles.successButton}
+                >
+                  Retour à la connexion
+                </Button>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.title}>Créer votre espace</Text>
+                <Text style={styles.subtitle}>
+                  {step === 1 && 'Informations de votre association'}
+                  {step === 2 && 'Vos informations personnelles'}
+                  {step === 3 && 'Récapitulatif'}
+                </Text>
 
             {/* Indicateur de progression */}
             <View style={styles.progressContainer}>
@@ -252,8 +269,8 @@ export default function OrganizationSignupScreen({
                 <Input
                   label="SIREN (optionnel)"
                   placeholder="Ex: 123456789"
-                  value={formData.siren}
-                  onChangeText={(text) => setFormData({ ...formData, siren: text })}
+                  value={formData.siren || ''}
+                  onChangeText={(text) => setFormData({ ...formData, siren: text.trim() === '' ? null : text })}
                   keyboardType="number-pad"
                   maxLength={9}
                 />
@@ -261,8 +278,8 @@ export default function OrganizationSignupScreen({
                 <Input
                   label="RNA (optionnel)"
                   placeholder="Ex: W751234567"
-                  value={formData.rna}
-                  onChangeText={(text) => setFormData({ ...formData, rna: text.toUpperCase() })}
+                  value={formData.rna || ''}
+                  onChangeText={(text) => setFormData({ ...formData, rna: text.trim() === '' ? null : text.toUpperCase() })}
                   autoCapitalize="characters"
                   maxLength={10}
                 />
@@ -298,8 +315,8 @@ export default function OrganizationSignupScreen({
                 <Input
                   label="Adresse (optionnel)"
                   placeholder="Ex: 123 rue de la République"
-                  value={formData.address}
-                  onChangeText={(text) => setFormData({ ...formData, address: text })}
+                  value={formData.address || ''}
+                  onChangeText={(text) => setFormData({ ...formData, address: text.trim() === '' ? null : text })}
                   multiline
                   numberOfLines={2}
                 />
@@ -409,6 +426,8 @@ export default function OrganizationSignupScreen({
                   </Button>
                 </View>
               </View>
+            )}
+              </>
             )}
           </View>
         </View>
@@ -607,5 +626,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1e40af',
     textAlign: 'center',
+  },
+  successContainer: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 16,
+  },
+  successIconContainer: {
+    marginBottom: 24,
+  },
+  successIcon: {
+    fontSize: 64,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  successMessage: {
+    fontSize: 16,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  successButton: {
+    width: '100%',
+    maxWidth: 300,
   },
 });

@@ -4,12 +4,14 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity
+  TouchableOpacity,
+  Dimensions,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { FolderOpen, Users, BarChart3, FileText } from 'lucide-react-native';
 import { initialDocuments, initialUtilisateurs } from '../data/mockData';
+import { isMobile, getFontSize, getSpacing, getResponsivePadding, MIN_TOUCH_TARGET, isLargeScreen } from '../utils/responsive';
 
 type DashboardScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Dashboard'>;
 
@@ -125,7 +127,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   scrollContent: {
-    padding: 16,
+    padding: getResponsivePadding(),
   },
   card: {
     backgroundColor: '#fff',
@@ -138,16 +140,16 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   content: {
-    padding: 20,
+    padding: getResponsivePadding(),
   },
   welcome: {
-    fontSize: 28,
+    fontSize: getFontSize(isMobile ? 24 : 28),
     fontWeight: 'bold',
     color: '#1e293b',
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: getFontSize(isMobile ? 14 : 16),
     color: '#64748b',
     marginBottom: 24,
   },
@@ -157,7 +159,7 @@ const styles = StyleSheet.create({
   statCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
+    padding: getSpacing(16),
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -167,25 +169,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    minHeight: isMobile ? MIN_TOUCH_TARGET + 20 : 'auto',
   },
   iconContainer: {
-    width: 48,
-    height: 48,
+    width: isMobile ? 44 : 48,
+    height: isMobile ? 44 : 48,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 16,
+    marginRight: getSpacing(16),
   },
   statInfo: {
     flex: 1,
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     color: '#64748b',
     marginBottom: 4,
   },
   statValue: {
-    fontSize: 24,
+    fontSize: getFontSize(isMobile ? 20 : 24),
     fontWeight: 'bold',
     color: '#1e293b',
   },
@@ -194,7 +197,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: getFontSize(isMobile ? 18 : 20),
     fontWeight: 'bold',
     color: '#1e293b',
     marginBottom: 16,
@@ -202,7 +205,7 @@ const styles = StyleSheet.create({
   actionButton: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
+    padding: getSpacing(16),
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 12,
@@ -211,9 +214,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    minHeight: isMobile ? MIN_TOUCH_TARGET + 8 : 'auto',
   },
   actionText: {
-    fontSize: 16,
+    fontSize: getFontSize(16),
     color: '#1e293b',
     marginLeft: 12,
     fontWeight: '600',
@@ -224,7 +228,7 @@ const styles = StyleSheet.create({
   activityCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
+    padding: getSpacing(16),
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -233,6 +237,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   activityIcon: {
     width: 40,
@@ -247,13 +252,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   activityTitle: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     fontWeight: '600',
     color: '#1e293b',
     marginBottom: 4,
   },
   activityTime: {
-    fontSize: 12,
+    fontSize: getFontSize(12),
     color: '#64748b',
   },
 });

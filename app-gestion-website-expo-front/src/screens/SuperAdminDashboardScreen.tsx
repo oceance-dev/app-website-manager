@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import { Users, Building2, CheckCircle, Clock, XCircle, TrendingUp, ThumbsUp, ThumbsDown, Pause, Play } from 'lucide-react-native';
-import { isWeb } from '../utils/responsive';
+import { isWeb, isMobile, getFontSize, getSpacing, getResponsivePadding, MIN_TOUCH_TARGET } from '../utils/responsive';
 import { AssociationsApi, AssociationWithStats, ApiError, UsersApi, UserResponse } from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '../components/ui/button';
@@ -518,19 +518,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
-    padding: 20,
+    padding: getResponsivePadding(),
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
   title: {
-    fontSize: 24,
+    fontSize: getFontSize(isMobile ? 20 : 24),
     fontWeight: 'bold',
     color: '#1e293b',
     marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: getFontSize(isMobile ? 12 : 14),
     color: '#64748b',
   },
   tabsContainer: {
@@ -538,23 +538,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
-    paddingHorizontal: 20,
+    paddingHorizontal: isMobile ? 8 : 20,
+    flexWrap: isMobile ? 'wrap' : 'nowrap',
   },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    marginRight: 8,
+    paddingVertical: isMobile ? 12 : 16,
+    paddingHorizontal: isMobile ? 12 : 16,
+    marginRight: isMobile ? 4 : 8,
     gap: 8,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   tabActive: {
     borderBottomColor: '#2563eb',
   },
   tabText: {
-    fontSize: 14,
+    fontSize: getFontSize(isMobile ? 12 : 14),
     color: '#64748b',
     fontWeight: '500',
   },
@@ -563,7 +565,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   content: {
-    padding: 20,
+    padding: getResponsivePadding(),
   },
   statsGrid: {
     flexDirection: 'row',
@@ -574,29 +576,30 @@ const styles = StyleSheet.create({
   statCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
+    padding: getSpacing(16),
     flex: 1,
     minWidth: isWeb ? 150 : '45%',
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    minHeight: isMobile ? 120 : 'auto',
   },
   statIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: isMobile ? 40 : 48,
+    height: isMobile ? 40 : 48,
+    borderRadius: isMobile ? 20 : 24,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
   statValue: {
-    fontSize: 32,
+    fontSize: getFontSize(isMobile ? 24 : 32),
     fontWeight: 'bold',
     color: '#1e293b',
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: getFontSize(12),
     color: '#64748b',
     textAlign: 'center',
   },
@@ -613,14 +616,14 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e2e8f0',
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: getFontSize(isMobile ? 16 : 18),
     fontWeight: '600',
     color: '#1e293b',
   },
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
+    padding: getSpacing(16),
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -638,7 +641,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: getFontSize(16),
     fontWeight: '600',
     color: '#1e293b',
   },
@@ -646,7 +649,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   cardDetail: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     color: '#64748b',
   },
   badge: {
@@ -664,7 +667,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   actionButtons: {
-    flexDirection: 'row',
+    flexDirection: isMobile ? 'column' : 'row',
     gap: 8,
     marginTop: 12,
     flexWrap: 'wrap',
@@ -672,13 +675,15 @@ const styles = StyleSheet.create({
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: getSpacing(12),
+    paddingVertical: isMobile ? 12 : 8,
     borderRadius: 8,
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   actionButtonText: {
-    fontSize: 12,
+    fontSize: getFontSize(isMobile ? 14 : 12),
     fontWeight: '600',
   },
 });

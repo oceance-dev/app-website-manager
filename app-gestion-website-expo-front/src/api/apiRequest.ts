@@ -65,7 +65,7 @@ async function refreshAccessToken(): Promise<string> {
   }
 
   try {
-    const response = await fetch(`${API_CONFIG.BASE_URL}/v1/auth/refresh`, {
+    const response = await fetch(`${API_CONFIG.BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -200,7 +200,13 @@ export async function apiRequest<T = unknown>(
     const data = await response.json();
 
     // Token expiré → tenter un refresh
-    if (response.status === 401 && !skipAuth && retryCount < 1) {
+    // Ne pas tenter de refresh si c'est une erreur de compte inactif ou d'association inactive
+    const isAccountError = data.code === 'ACCOUNT_INACTIVE' ||
+                          data.code === 'ASSOCIATION_INACTIVE' ||
+                          data.message?.includes('compte n\'est pas encore activé') ||
+                          data.message?.includes('association n\'est pas active');
+
+    if (response.status === 401 && !skipAuth && retryCount < 1 && !isAccountError) {
       try {
         await handleTokenRefresh();
 

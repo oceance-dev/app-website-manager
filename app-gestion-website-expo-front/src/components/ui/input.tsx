@@ -7,10 +7,11 @@ export interface InputProps
   error?: string;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
+  wrapperStyle?: any;
 }
 
 const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
-  ({ style, label, error, leftIcon, rightIcon, ...props }, ref) => {
+  ({ style, label, error, leftIcon, rightIcon, wrapperStyle, ...props }, ref) => {
     return (
       <View style={styles.container}>
         {label && (
@@ -22,6 +23,7 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
           style={[
             styles.inputWrapper,
             error && styles.inputWrapperError,
+            wrapperStyle,
           ]}
         >
           {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}

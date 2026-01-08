@@ -22,6 +22,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Folder } from '../../types';
 import { canUserAccessFolder } from '../../utils/permissions';
 import { Button } from '../ui/button';
+import { isMobile, getFontSize, getSpacing, getResponsivePadding, MIN_TOUCH_TARGET, getModalWidth, getModalHeight } from '../../utils/responsive';
 
 interface AddDocumentModalProps {
   visible: boolean;
@@ -295,64 +296,71 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
+    justifyContent: isMobile ? 'flex-end' : 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: isMobile ? 0 : 20,
   },
   modalContainer: {
     backgroundColor: 'white',
-    borderRadius: 16,
+    borderRadius: isMobile ? 16 : 16,
+    borderBottomLeftRadius: isMobile ? 0 : 16,
+    borderBottomRightRadius: isMobile ? 0 : 16,
     width: '100%',
-    maxWidth: 500,
-    maxHeight: '80%',
+    maxWidth: isMobile ? '100%' : 500,
+    maxHeight: isMobile ? '90%' : '80%',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: getResponsivePadding(),
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: getFontSize(isMobile ? 18 : 20),
     fontWeight: 'bold',
     color: '#1e293b',
   },
   closeButton: {
     padding: 4,
+    minWidth: isMobile ? MIN_TOUCH_TARGET : 'auto',
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   content: {
-    padding: 20,
+    padding: getResponsivePadding(),
   },
   section: {
-    marginBottom: 20,
+    marginBottom: getSpacing(20),
   },
   label: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     fontWeight: '600',
     color: '#334155',
     marginBottom: 8,
   },
   visibilityContainer: {
-    flexDirection: 'row',
+    flexDirection: isMobile ? 'column' : 'row',
     gap: 12,
   },
   visibilityButton: {
     flex: 1,
-    padding: 16,
+    padding: getSpacing(16),
     borderRadius: 8,
     borderWidth: 2,
     borderColor: '#cbd5e1',
     backgroundColor: 'white',
     alignItems: 'center',
+    minHeight: isMobile ? MIN_TOUCH_TARGET + 20 : 'auto',
   },
   visibilityButtonSelected: {
     backgroundColor: '#eff6ff',
     borderColor: '#2563eb',
   },
   visibilityButtonText: {
-    fontSize: 16,
+    fontSize: getFontSize(16),
     fontWeight: '600',
     color: '#475569',
     marginBottom: 4,
@@ -361,7 +369,7 @@ const styles = StyleSheet.create({
     color: '#2563eb',
   },
   visibilityDescription: {
-    fontSize: 12,
+    fontSize: getFontSize(12),
     color: '#64748b',
     textAlign: 'center',
   },
@@ -377,11 +385,12 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: '#2563eb',
     borderRadius: 8,
-    padding: 24,
+    padding: getSpacing(24),
     backgroundColor: '#eff6ff',
+    minHeight: isMobile ? MIN_TOUCH_TARGET + 20 : 'auto',
   },
   uploadButtonText: {
-    fontSize: 16,
+    fontSize: getFontSize(16),
     fontWeight: '600',
     color: '#2563eb',
   },
@@ -398,13 +407,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   selectedFileName: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     fontWeight: '600',
     color: '#1e293b',
     marginBottom: 4,
   },
   selectedFileDetails: {
-    fontSize: 12,
+    fontSize: getFontSize(12),
     color: '#475569',
   },
   removeFileButton: {
@@ -421,19 +430,21 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   folderButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: getSpacing(16),
+    paddingVertical: isMobile ? 12 : 10,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#cbd5e1',
     backgroundColor: 'white',
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
+    justifyContent: 'center',
   },
   folderButtonSelected: {
     backgroundColor: '#22c55e',
     borderColor: '#22c55e',
   },
   folderButtonText: {
-    fontSize: 14,
+    fontSize: getFontSize(14),
     fontWeight: '600',
     color: '#475569',
   },
@@ -441,14 +452,14 @@ const styles = StyleSheet.create({
     color: 'white',
   },
   errorText: {
-    fontSize: 12,
+    fontSize: getFontSize(12),
     color: '#ef4444',
     marginTop: 8,
     fontStyle: 'italic',
   },
   footer: {
-    flexDirection: 'row',
-    padding: 20,
+    flexDirection: isMobile ? 'column' : 'row',
+    padding: getResponsivePadding(),
     gap: 12,
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',

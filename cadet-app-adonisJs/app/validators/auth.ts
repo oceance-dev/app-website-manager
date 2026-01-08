@@ -20,7 +20,9 @@ export const registerAssociationValidator = vine.compile(
                     if (!value) return true
                     const exists = await db.from('associations').where('rna', value).first()
                     return !exists
-                }).optional(),
+                })
+                .nullable()
+                .optional(),
 
             siret: vine
                 .string()
@@ -30,7 +32,9 @@ export const registerAssociationValidator = vine.compile(
                     if (!value) return true
                     const exists = await db.from('associations').where('siret', value).first()
                     return !exists
-                }).optional(),
+                })
+                .nullable()
+                .optional(),
 
             email: vine
                 .string()
