@@ -66,12 +66,39 @@ export const UsersApi = {
     if (filters?.page) queryParams.append('page', filters.page.toString());
     if (filters?.limit) queryParams.append('limit', filters.limit.toString());
     if (filters?.search) queryParams.append('search', filters.search);
-   
+
     const url = `${API_CONFIG.BASE_URL}/admin/users${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     const data = await api.get<GetAllUsersResponse>(url);
     return { success: true, data };
   },
 
+  /**
+   * Récupérer les informations de l'utilisateur connecté
+   */
+  async getMe(): Promise<ApiResponse<{ user: UserResponse }>> {
+    const data = await api.get<{ user: UserResponse }>('/users/me');
+    return { success: true, data };
+  },
+
+  /**
+   * Mettre à jour les informations de l'utilisateur connecté
+   */
+  async updateMe(userData: Partial<UserResponse>): Promise<ApiResponse<{ user: UserResponse }>> {
+    const data = await api.put<{ user: UserResponse }>('/users/me/update', userData);
+    return { success: true, data };
+  },
+
+  /**
+   * Changer le mot de passe de l'utilisateur connecté
+   */
+  async changePassword(passwordData: {
+    currentPassword: string;
+    newPassword: string;
+    newPasswordConfirmation: string;
+  }): Promise<ApiResponse<{ message: string }>> {
+    const data = await api.post<{ message: string }>('/users/me/change-password', passwordData);
+    return { success: true, data };
+  },
 
   /**
    * Approuver un utilisateur

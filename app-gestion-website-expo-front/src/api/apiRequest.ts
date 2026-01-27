@@ -7,6 +7,7 @@
 
 import { API_CONFIG } from './config';
 import { tokenStorage, type AuthTokens } from './tokenStorage';
+import { authEventEmitter } from './authEventEmitter';
 
 // ========================================
 // API ERROR CLASS
@@ -78,6 +79,8 @@ async function refreshAccessToken(): Promise<string> {
     if (!response.ok || !data.success) {
       // Refresh token invalide ou expiré → déconnexion
       await tokenStorage.clearTokens();
+      // Émettre l'événement de session expirée
+      authEventEmitter.emitSessionExpired();
       throw new ApiRequestError(
         data.message || 'Session expired',
         data.code || 'REFRESH_FAILED',
@@ -97,6 +100,8 @@ async function refreshAccessToken(): Promise<string> {
     return tokens.accessToken;
   } catch (error) {
     await tokenStorage.clearTokens();
+    // Émettre l'événement de session expirée
+    authEventEmitter.emitSessionExpired();
     throw error;
   }
 }

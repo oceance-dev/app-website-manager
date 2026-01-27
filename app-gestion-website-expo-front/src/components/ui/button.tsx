@@ -1,11 +1,12 @@
 import * as React from "react";
 import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, ViewStyle, TextStyle } from "react-native";
+import { colors, spacing, borderRadius, shadows } from '../../theme';
 
 export interface ButtonProps
   extends React.ComponentPropsWithoutRef<typeof TouchableOpacity> {
   children?: React.ReactNode;
   isLoading?: boolean;
-  variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
+  variant?: "default" | "primary" | "secondary" | "destructive" | "outline" | "ghost" | "hero";
   size?: "default" | "sm" | "lg" | "icon";
 }
 
@@ -21,18 +22,20 @@ const Button = React.forwardRef<
     };
 
     switch (variant) {
+      case "primary":
+        return { ...baseStyle, ...styles.primary };
       case "default":
-        return { ...baseStyle, ...styles.default };
+        return { ...baseStyle, ...styles.primary };
+      case "secondary":
+        return { ...baseStyle, ...styles.secondary };
       case "destructive":
         return { ...baseStyle, ...styles.destructive };
       case "outline":
         return { ...baseStyle, ...styles.outline };
-      case "secondary":
-        return { ...baseStyle, ...styles.secondary };
       case "ghost":
         return { ...baseStyle, ...styles.ghost };
-      case "link":
-        return { ...baseStyle, ...styles.link };
+      case "hero":
+        return { ...baseStyle, ...styles.hero };
       default:
         return baseStyle;
     }
@@ -45,18 +48,20 @@ const Button = React.forwardRef<
     };
 
     switch (variant) {
+      case "primary":
+        return { ...baseTextStyle, ...styles.text_primary };
       case "default":
-        return { ...baseTextStyle, ...styles.text_default };
+        return { ...baseTextStyle, ...styles.text_primary };
+      case "secondary":
+        return { ...baseTextStyle, ...styles.text_secondary };
       case "destructive":
         return { ...baseTextStyle, ...styles.text_destructive };
       case "outline":
         return { ...baseTextStyle, ...styles.text_outline };
-      case "secondary":
-        return { ...baseTextStyle, ...styles.text_secondary };
       case "ghost":
         return { ...baseTextStyle, ...styles.text_ghost };
-      case "link":
-        return { ...baseTextStyle, ...styles.text_link };
+      case "hero":
+        return { ...baseTextStyle, ...styles.text_hero };
       default:
         return baseTextStyle;
     }
@@ -76,7 +81,7 @@ const Button = React.forwardRef<
     >
       {isLoading ? (
         <ActivityIndicator
-          color={variant === "outline" || variant === "ghost" ? "#2563eb" : "#fff"}
+          color={variant === "outline" || variant === "ghost" ? colors.navy : colors.white}
           size="small"
         />
       ) : typeof children === "string" ? (
@@ -95,62 +100,52 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 10,
+    gap: spacing.sm,
+    borderRadius: borderRadius.lg,
   },
 
   // Sizes
   size_default: {
-    height: 48,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
   },
   size_sm: {
-    height: 36,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
   },
   size_lg: {
-    height: 56,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xxl,
   },
   size_icon: {
-    height: 40,
     width: 40,
+    height: 40,
     paddingHorizontal: 0,
     paddingVertical: 0,
   },
 
   // Variants
-  default: {
-    backgroundColor: '#2563eb',
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+  primary: {
+    backgroundColor: colors.navy,
   },
-  destructive: {
-    backgroundColor: '#ef4444',
-    shadowColor: '#ef4444',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+  secondary: {
+    backgroundColor: colors.muted,
   },
   outline: {
     backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: '#cbd5e1',
-  },
-  secondary: {
-    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   ghost: {
     backgroundColor: 'transparent',
   },
-  link: {
-    backgroundColor: 'transparent',
+  destructive: {
+    backgroundColor: colors.error,
+  },
+  hero: {
+    backgroundColor: colors.gold,
+    borderRadius: borderRadius['2xl'],
+    ...shadows.gold,
   },
 
   // Text styles base
@@ -161,37 +156,37 @@ const styles = StyleSheet.create({
 
   // Text sizes
   text_default: {
-    fontSize: 16,
+    fontSize: 14,
   },
   text_sm: {
     fontSize: 14,
   },
   text_lg: {
-    fontSize: 18,
+    fontSize: 16,
   },
   text_icon: {
-    fontSize: 16,
+    fontSize: 14,
   },
 
   // Text variants
-  text_default: {
-    color: '#fff',
-  },
-  text_destructive: {
-    color: '#fff',
-  },
-  text_outline: {
-    color: '#1e293b',
+  text_primary: {
+    color: colors.white,
   },
   text_secondary: {
-    color: '#475569',
+    color: colors.foreground,
+  },
+  text_outline: {
+    color: colors.foreground,
   },
   text_ghost: {
-    color: '#1e293b',
+    color: colors.mutedForeground,
   },
-  text_link: {
-    color: '#2563eb',
-    textDecorationLine: 'underline',
+  text_destructive: {
+    color: colors.white,
+  },
+  text_hero: {
+    color: colors.navyDark,
+    fontWeight: '700',
   },
 
   disabled: {

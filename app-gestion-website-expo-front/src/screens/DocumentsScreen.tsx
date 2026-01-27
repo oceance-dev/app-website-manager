@@ -11,17 +11,24 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Plus, Eye, Download, Trash2, Folder as FolderIcon, ChevronRight, Lock, X, FolderDown } from 'lucide-react-native';
+import { Plus, Eye, Download, Trash2, Folder as FolderIcon, ChevronRight, Lock, X, FolderDown, Grid3x3, List, MoreVertical, FileText, File as FileIcon } from 'lucide-react-native';
 import { Document, Folder, User, DocumentPermission } from '../types';
 import { initialDocuments, initialFolders, initialUtilisateurs, courseDocuments } from '../data/mockData';
+import { colors, textStyles, spacing, shadows, borderRadius } from '../theme';
+import { Card, SearchBar, Badge } from '../components/cadep';
 import AddDocumentModal from '../components/modalsHelper/AddDocumentModal';
 import CreateFolderModal from '../components/modalsHelper/CreateFolderModal';
 import DocumentViewerModal from '../components/modalsHelper/DocumentViewerModal';
+import DeleteFolderModal from '../components/modalsHelper/DeleteFolderModal';
+import DeleteDocumentModal from '../components/modalsHelper/DeleteDocumentModal';
+import Toast, { ToastType } from '../components/ui/Toast';
 import { canUserAccessFolder, getUserRoleOnFolder, getRoleDisplay } from '../utils/permissions';
 import { isWeb, isMobile, getFontSize, getSpacing, getResponsivePadding, MIN_TOUCH_TARGET, isSmallMobile } from '../utils/responsive';
 import { Button } from '../components/ui/button';
 import { DocumentsApi, FoldersApi, AuthApi, AssociationsApi, type AuthUser } from '../api';
 import { tokenStorage } from '../api/tokenStorage';
+import { generateFolderSlug } from '../utils/slug';
+import { authEventEmitter } from '../api/authEventEmitter';
 
 export default function DocumentsScreen() {
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -41,6 +48,39 @@ export default function DocumentsScreen() {
   const [viewerDocumentName, setViewerDocumentName] = useState('');
   const [viewerDocumentMimeType, setViewerDocumentMimeType] = useState('');
   const [associationMembers, setAssociationMembers] = useState<User[]>([]);
+
+  // États pour la suppression de dossier
+  const [showDeleteFolderModal, setShowDeleteFolderModal] = useState(false);
+  const [folderToDelete, setFolderToDelete] = useState<{
+    id: number;
+    name: string;
+    documentsCount: number;
+    childrenCount: number;
+  } | null>(null);
+  const [isDeletingFolder, setIsDeletingFolder] = useState(false);
+
+  // États pour la suppression de document
+  const [showDeleteDocumentModal, setShowDeleteDocumentModal] = useState(false);
+  const [documentToDelete, setDocumentToDelete] = useState<{
+    id: number;
+    name: string;
+    type: string;
+    size: string;
+  } | null>(null);
+  const [isDeletingDocument, setIsDeletingDocument] = useState(false);
+
+  // États pour le toast
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<ToastType>('success');
+
+  // État pour le mode d'affichage (grid ou list)
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
+
+  // États pour le menu contextuel
+  const [showContextMenu, setShowContextMenu] = useState(false);
+  const [contextMenuType, setContextMenuType] = useState<'folder' | 'document'>('document');
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
 
   const currentFolder = folders.find((f) => f.id === currentFolderId);
   const currentUserId = currentAuthUser?.id || 1;
@@ -72,6 +112,23 @@ export default function DocumentsScreen() {
     fetchCurrentUser();
   }, []);
 
+  // Écouter les événements de session expirée
+  React.useEffect(() => {
+    const handleSessionExpired = () => {
+      console.log('🔒 Session expired, showing error message');
+      showErrorToast('Votre session a expiré. Veuillez vous reconnecter.');
+      // Vous pouvez aussi rediriger vers l'écran de connexion ici
+    };
+
+    // S'abonner aux événements d'expiration de session
+    const unsubscribe = authEventEmitter.subscribe(handleSessionExpired);
+
+    return () => {
+      // Cleanup: retirer le listener au démontage
+      unsubscribe();
+    };
+  }, []);
+
   // Charger les documents depuis la BDD
   const fetchDocuments = async () => {
     try {
@@ -79,6 +136,9 @@ export default function DocumentsScreen() {
       const response = await DocumentsApi.getAll();
 
       if (response.success && response.data) {
+        console.log('📄 Documents from API:', response.data.documents);
+        console.log('📊 Total documents count:', response.data.documents.length);
+
         // Mapper les documents de l'API au format local
         const mappedDocuments: Document[] = response.data.documents.map((doc) => ({
           id: doc.id,
@@ -91,6 +151,15 @@ export default function DocumentsScreen() {
           uri: doc.filePath,
           mimeType: doc.mimeType,
         }));
+
+        console.log('📄 Mapped documents:', mappedDocuments);
+        console.log('📊 Documents by folder:');
+        const byFolder = mappedDocuments.reduce((acc, doc) => {
+          const key = doc.folderId === null ? 'root (null)' : `folder ${doc.folderId}`;
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
+        console.log(byFolder);
 
         setDocuments(mappedDocuments);
       }
@@ -115,18 +184,32 @@ export default function DocumentsScreen() {
 
       if (response.success && response.data) {
         console.log('✅ Folders from API:', response.data.folders);
+        console.log('📊 Total folders count:', response.data.folders.length);
+
+        // Log des dossiers privés spécifiquement
+        const privateFolders = response.data.folders.filter((f: any) => f.type === 'private' || f.visibility === 'private');
+        console.log('🔒 Private folders:', privateFolders);
 
         // Mapper les dossiers de l'API au format local
         const mappedFolders: Folder[] = response.data.folders.map((folder: any) => ({
           id: folder.id,
           name: folder.name,
+          slug: folder.slug,
           parentId: folder.parentId,
-          createdBy: folder.ownerId, // Backend utilise ownerId
+          createdBy: folder.ownerId || folder.createdBy, // Backend utilise ownerId
           createdAt: folder.createdAt,
           permissions: folder.permissions || [], // Utiliser les permissions du backend
+          visibility: folder.visibility,
+          description: folder.description,
+          icon: folder.icon,
+          color: folder.color,
+          allowUpload: folder.allowUpload,
+          allowDownload: folder.allowDownload,
+          allowDelete: folder.allowDelete,
         }));
 
         console.log('🗂️ Mapped folders:', mappedFolders);
+        console.log('📂 Root folders (parentId === null):', mappedFolders.filter(f => f.parentId === null));
         setFolders(mappedFolders);
         console.log('📁 Folders loaded and set in state:', mappedFolders.length);
       } else {
@@ -205,6 +288,14 @@ export default function DocumentsScreen() {
   const handleViewDocument = async (id: number) => {
     console.log('📄 Viewing document:', id);
     try {
+      // Vérifier d'abord si on a un token valide
+      const token = await tokenStorage.getAccessToken();
+      if (!token) {
+        console.error('❌ No access token available');
+        showErrorToast('Session expirée. Veuillez vous reconnecter.');
+        return;
+      }
+
       const response = await DocumentsApi.viewDocument(id);
       console.log('📄 View response:', response);
 
@@ -212,7 +303,6 @@ export default function DocumentsScreen() {
         const doc = response.data.document;
 
         // Télécharger le fichier avec authentification et créer un blob URL
-        const token = await tokenStorage.getAccessToken();
         const downloadPath = DocumentsApi.downloadDocument(id);
 
         console.log('📄 Fetching document from:', downloadPath);
@@ -225,6 +315,10 @@ export default function DocumentsScreen() {
         });
 
         if (!fileResponse.ok) {
+          if (fileResponse.status === 401) {
+            showErrorToast('Session expirée. Veuillez vous reconnecter.');
+            return;
+          }
           throw new Error(`Erreur HTTP: ${fileResponse.status}`);
         }
 
@@ -251,18 +345,19 @@ export default function DocumentsScreen() {
         setShowViewerModal(true);
       } else {
         console.warn('📄 No document in response:', response);
-        if (isWeb) {
-          alert('Impossible de récupérer les informations du document');
-        } else {
-          Alert.alert('Erreur', 'Impossible de récupérer les informations du document');
-        }
+        showErrorToast('Impossible de récupérer les informations du document');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error viewing document:', error);
-      if (isWeb) {
-        alert(`Erreur lors de l'ouverture du document: ${error}`);
+
+      // Gestion des erreurs d'authentification
+      if (error?.code === 'SESSION_EXPIRED' || error?.status === 401) {
+        showErrorToast('Votre session a expiré. Veuillez vous reconnecter.');
+      } else if (error?.code === 'NETWORK_ERROR') {
+        showErrorToast('Erreur de connexion. Vérifiez votre réseau.');
       } else {
-        Alert.alert('Erreur', 'Impossible d\'ouvrir le document');
+        const errorMessage = error?.message || 'Impossible d\'ouvrir le document';
+        showErrorToast(errorMessage);
       }
     }
   };
@@ -298,8 +393,56 @@ export default function DocumentsScreen() {
     }
   };
 
-  const handleDeleteDocument = (id: number) => {
-    setDocuments(documents.filter((doc) => doc.id !== id));
+  // Ouvrir la modal de suppression de document
+  const handleOpenDeleteDocumentModal = (id: number) => {
+    const document = documents.find((doc) => doc.id === id);
+    if (!document) return;
+
+    setDocumentToDelete({
+      id,
+      name: document.nameDoc,
+      type: document.type,
+      size: document.length,
+    });
+    setShowDeleteDocumentModal(true);
+  };
+
+  // Confirmer la suppression du document
+  const handleConfirmDeleteDocument = async () => {
+    if (!documentToDelete) return;
+
+    setIsDeletingDocument(true);
+
+    try {
+      console.log('🗑️ Deleting document:', documentToDelete.id);
+      const response = await DocumentsApi.deleteDocument(documentToDelete.id);
+
+      if (response.success) {
+        console.log('✅ Document deleted successfully');
+
+        // Fermer la modal
+        setShowDeleteDocumentModal(false);
+        setDocumentToDelete(null);
+
+        // Remove from local state
+        setDocuments(documents.filter((doc) => doc.id !== documentToDelete.id));
+
+        // Afficher le toast de succès
+        showSuccessToast(`Document "${documentToDelete.name}" supprimé avec succès`);
+      }
+    } catch (error: any) {
+      console.error('❌ Error deleting document:', error);
+
+      // Fermer la modal
+      setShowDeleteDocumentModal(false);
+      setDocumentToDelete(null);
+
+      // Afficher le toast d'erreur
+      const errorMessage = error.response?.data?.message || error.message || 'Erreur lors de la suppression du document';
+      showErrorToast(errorMessage);
+    } finally {
+      setIsDeletingDocument(false);
+    }
   };
 
   const handleOpenPermissionsModal = (document: Document) => {
@@ -358,6 +501,13 @@ export default function DocumentsScreen() {
     try {
       setUploadingDocument(true);
 
+      console.log('📤 Uploading document with data:', {
+        nameDoc: newDoc.nameDoc,
+        folderId: newDoc.folderId,
+        currentFolderId: currentFolderId,
+        visibility: newDoc.visibility,
+      });
+
       // Convertir l'URI en File pour l'upload (en gardant le nom et le type MIME)
       let file: File;
 
@@ -377,6 +527,13 @@ export default function DocumentsScreen() {
       // Mapper la visibilité du frontend vers le backend
       const backendVisibility = newDoc.visibility === 'personal' ? 'private' : 'members';
 
+      console.log('📤 Sending to API:', {
+        name: newDoc.nameDoc,
+        folderId: newDoc.folderId,
+        visibility: backendVisibility,
+        category: 'other',
+      });
+
       // Uploader le document via l'API
       const uploadResponse = await DocumentsApi.upload({
         name: newDoc.nameDoc,
@@ -390,75 +547,193 @@ export default function DocumentsScreen() {
         // Recharger les documents depuis la BDD pour afficher les données à jour
         await fetchDocuments();
 
-        // Afficher un message de succès
-        if (isWeb) {
-          alert('Document ajouté avec succès !');
-        } else {
-          Alert.alert('Succès', 'Document ajouté avec succès !');
-        }
+        // Afficher le toast de succès
+        showSuccessToast(`Document "${newDoc.nameDoc}" ajouté avec succès`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading document:', error);
 
-      if (isWeb) {
-        alert('Erreur lors de l\'ajout du document');
-      } else {
-        Alert.alert('Erreur', 'Impossible d\'ajouter le document');
-      }
+      // Afficher le toast d'erreur
+      const errorMessage = error.response?.data?.message || error.message || 'Erreur lors de l\'ajout du document';
+      showErrorToast(errorMessage);
     } finally {
       setUploadingDocument(false);
     }
   };
 
   const handleCreateFolder = async (newFolder: Omit<Folder, 'id' | 'createdAt'>) => {
-    try {
-      // Déterminer la visibilité selon le rôle de l'utilisateur
-      let visibility: 'private' | 'members' | 'staff' | 'public' = 'members';
+    console.log('📁 Creating folder with data:', newFolder);
+    console.log('👤 Current auth user:', {
+      id: currentAuthUser?.id,
+      associationId: currentAuthUser?.associationId,
+    });
 
-      // Super admin peut créer des dossiers pour le staff
-      if (currentAuthUser?.role.name === 'super_admin') {
-        visibility = 'staff';
+    // Générer le slug: nom-dossier-userId-associationId
+    const slug = generateFolderSlug(
+      newFolder.name,
+      currentAuthUser?.id || currentUserId,
+      currentAuthUser?.associationId || null
+    );
+
+    console.log('🏷️ Generated slug:', slug);
+    console.log('🔍 Slug breakdown:', {
+      folderName: newFolder.name,
+      userId: currentAuthUser?.id || currentUserId,
+      associationId: currentAuthUser?.associationId || null,
+      result: slug
+    });
+
+    // Créer l'objet de données à envoyer
+    const folderDataToSend = {
+      name: newFolder.name,
+      slug,
+      parentId: newFolder.parentId,
+      visibility: newFolder.visibility || 'members',
+      description: newFolder.description,
+      icon: newFolder.icon,
+      color: newFolder.color,
+      allowUpload: true,
+      allowDownload: true,
+      allowDelete: false,
+    };
+
+    console.log('📤 Sending to API:', JSON.stringify(folderDataToSend, null, 2));
+
+    // Créer le dossier via l'API avec toutes les propriétés
+    const response = await FoldersApi.create(folderDataToSend);
+
+    if (response.success && response.data) {
+      console.log('✅ Folder created successfully:', response.data);
+      // Recharger les dossiers depuis la BDD
+      await fetchFolders();
+
+      // Afficher le toast de succès
+      showSuccessToast(`Dossier "${newFolder.name}" créé avec succès`);
+    }
+    // Les erreurs seront propagées à la modal qui les gérera
+  };
+
+  // Fonction pour afficher un toast
+  const showSuccessToast = (message: string) => {
+    setToastMessage(message);
+    setToastType('success');
+    setShowToast(true);
+  };
+
+  const showErrorToast = (message: string) => {
+    setToastMessage(message);
+    setToastType('error');
+    setShowToast(true);
+  };
+
+  // Gérer l'ouverture du menu contextuel
+  const handleOpenContextMenu = (id: number, type: 'folder' | 'document') => {
+    setSelectedItemId(id);
+    setContextMenuType(type);
+    setShowContextMenu(true);
+  };
+
+  const handleCloseContextMenu = () => {
+    setShowContextMenu(false);
+    setSelectedItemId(null);
+  };
+
+  const handleContextMenuAction = async (action: string) => {
+    if (!selectedItemId) return;
+
+    handleCloseContextMenu();
+
+    if (contextMenuType === 'document') {
+      const document = documents.find(d => d.id === selectedItemId);
+      if (!document) return;
+
+      switch (action) {
+        case 'view':
+          handleViewDocument(selectedItemId);
+          break;
+        case 'download':
+          handleDownloadDocument(selectedItemId, document.nameDoc);
+          break;
+        case 'delete':
+          handleOpenDeleteDocumentModal(selectedItemId);
+          break;
+        case 'permissions':
+          handleOpenPermissionsModal(document);
+          break;
       }
-      // Les autres utilisateurs créent des dossiers pour tous les membres
-      else {
-        visibility = 'members';
-      }
+    } else {
+      const folder = folders.find(f => f.id === selectedItemId);
+      if (!folder) return;
 
-      // Créer le dossier via l'API
-      const response = await FoldersApi.create({
-        name: newFolder.name,
-        parentId: newFolder.parentId,
-        visibility,
-        allowUpload: true,
-        allowDownload: true,
-        allowDelete: false,
-      });
-
-      if (response.success && response.data) {
-        // Recharger les dossiers depuis la BDD
-        await fetchFolders();
-
-        if (isWeb) {
-          alert('Dossier créé avec succès !');
-        } else {
-          Alert.alert('Succès', 'Dossier créé avec succès !');
-        }
-      }
-    } catch (error) {
-      console.error('Error creating folder:', error);
-
-      if (isWeb) {
-        alert('Erreur lors de la création du dossier');
-      } else {
-        Alert.alert('Erreur', 'Impossible de créer le dossier');
+      switch (action) {
+        case 'open':
+          navigateToFolder(selectedItemId);
+          break;
+        case 'delete':
+          handleOpenDeleteFolderModal(selectedItemId);
+          break;
       }
     }
   };
 
-  const handleDeleteFolder = (id: number) => {
-    // Supprimer le dossier et tous les documents qu'il contient
-    setFolders(folders.filter((f) => f.id !== id && f.parentId !== id));
-    setDocuments(documents.filter((doc) => doc.folderId !== id));
+  // Ouvrir la modal de suppression avec les informations du dossier
+  const handleOpenDeleteFolderModal = async (id: number) => {
+    const folder = folders.find((f) => f.id === id);
+    if (!folder) return;
+
+    // Compter les documents et sous-dossiers
+    const documentsCount = documents.filter((doc) => doc.folderId === id).length;
+    const childrenCount = folders.filter((f) => f.parentId === id).length;
+
+    setFolderToDelete({
+      id,
+      name: folder.name,
+      documentsCount,
+      childrenCount,
+    });
+    setShowDeleteFolderModal(true);
+  };
+
+  // Confirmer la suppression du dossier
+  const handleConfirmDeleteFolder = async () => {
+    if (!folderToDelete) return;
+
+    setIsDeletingFolder(true);
+
+    try {
+      console.log('🗑️ Deleting folder:', folderToDelete.id);
+
+      // Toujours utiliser force=true si on arrive ici (l'utilisateur a déjà confirmé via la modal)
+      const hasContent = folderToDelete.documentsCount > 0 || folderToDelete.childrenCount > 0;
+      const response = await FoldersApi.delete(folderToDelete.id, hasContent);
+
+      if (response.success) {
+        console.log('✅ Folder deleted successfully');
+
+        // Fermer la modal
+        setShowDeleteFolderModal(false);
+        setFolderToDelete(null);
+
+        // Recharger les dossiers et documents
+        await fetchFolders();
+        await fetchDocuments();
+
+        // Afficher le toast de succès
+        showSuccessToast(`Dossier "${folderToDelete.name}" supprimé avec succès`);
+      }
+    } catch (error: any) {
+      console.error('❌ Error deleting folder:', error);
+
+      // Fermer la modal
+      setShowDeleteFolderModal(false);
+      setFolderToDelete(null);
+
+      // Afficher le toast d'erreur
+      const errorMessage = error.response?.data?.message || error.message || 'Erreur lors de la suppression du dossier';
+      showErrorToast(errorMessage);
+    } finally {
+      setIsDeletingFolder(false);
+    }
   };
 
   const navigateToFolder = (folderId: number) => {
@@ -514,13 +789,17 @@ export default function DocumentsScreen() {
   const currentDocuments = documents.filter((doc) => doc.folderId === currentFolderId);
 
   const getTypeColor = (type: string) => {
-    const colors: Record<string, string> = {
-      PDF: '#ef4444',
-      DOCX: '#3b82f6',
-      XLSX: '#10b981',
-      PPTX: '#f59e0b',
+    const typeColors: Record<string, string> = {
+      PDF: '#EA4335',
+      DOCX: '#4285F4',
+      XLSX: '#0F9D58',
+      PPTX: '#FBBC04',
     };
-    return colors[type] || '#64748b';
+    return typeColors[type] || colors.gray[600];
+  };
+
+  const getFileIcon = (type: string) => {
+    return FileText;
   };
 
   const renderFolder = ({ item }: { item: Folder }) => {
@@ -529,44 +808,79 @@ export default function DocumentsScreen() {
     const canDelete = canUserAccessFolder(currentUserId, item, 'delete');
     const documentsCount = documents.filter((doc) => doc.folderId === item.id).length;
 
+    // Déterminer l'icône et la couleur
+    const folderIcon = item.icon || '📁';
+    const folderColor = item.color || '#3b82f6';
+
+    // Déterminer si le dossier est restreint pour l'utilisateur actuel
+    const isRestricted = item.visibility === 'private' && item.createdBy !== currentUserId;
+    const isStaffOnly = item.visibility === 'staff' && currentAuthUser?.role?.level && currentAuthUser.role.level < 70;
+
+    // Icône de restriction
+    const getVisibilityIcon = () => {
+      if (item.visibility === 'private') return '🔒';
+      if (item.visibility === 'staff') return '👥';
+      if (item.visibility === 'public') return '🌐';
+      return null;
+    };
+
     return (
       <TouchableOpacity
-        style={styles.folderCard}
+        style={[
+          viewMode === 'grid' ? styles.folderCardGrid : styles.folderCard,
+          (isRestricted || isStaffOnly) && styles.folderCardRestricted
+        ]}
         onPress={() => navigateToFolder(item.id)}
+        disabled={isRestricted || isStaffOnly}
       >
-        <View style={styles.folderIcon}>
-          <FolderIcon color="#3b82f6" size={32} />
+        <View style={[
+          styles.folderIcon,
+          viewMode === 'grid' && styles.folderIconGrid
+        ]}>
+          <FolderIcon
+            color="#F9AB00"
+            size={viewMode === 'grid' ? 48 : 24}
+            fill="#F9AB00"
+          />
+          {(isRestricted || isStaffOnly) && (
+            <View style={styles.restrictedBadge}>
+              <Lock color={colors.error} size={16} />
+            </View>
+          )}
         </View>
-        <View style={styles.folderInfo}>
+        <View style={[styles.folderInfo, viewMode === 'grid' && styles.folderInfoGrid]}>
           <View style={styles.folderHeader}>
-            <Text style={styles.folderName}>{item.name}</Text>
-            {roleDisplay && (
-              <View style={[styles.roleBadge, { backgroundColor: roleDisplay.color + '20' }]}>
-                <Text style={styles.roleIcon}>{roleDisplay.icon}</Text>
-                <Text style={[styles.roleText, { color: roleDisplay.color }]}>
-                  {roleDisplay.label}
-                </Text>
-              </View>
+            <Text style={[
+              styles.folderName,
+              (isRestricted || isStaffOnly) && styles.folderNameRestricted,
+              viewMode === 'grid' && styles.folderNameGrid
+            ]} numberOfLines={viewMode === 'grid' ? 2 : undefined}>
+              {item.name}
+            </Text>
+            {getVisibilityIcon() && (
+              <Text style={styles.visibilityIcon}>{getVisibilityIcon()}</Text>
             )}
           </View>
+          {viewMode === 'list' && item.description && (
+            <Text style={styles.folderDescription} numberOfLines={2}>
+              {item.description}
+            </Text>
+          )}
           <Text style={styles.folderMeta}>
-            {documentsCount} document{documentsCount !== 1 ? 's' : ''}
+            {documentsCount} doc{documentsCount !== 1 ? 's' : ''}
           </Text>
         </View>
-        <View style={styles.folderActions}>
-          {canDelete && (
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={(e) => {
-                e.stopPropagation();
-                handleDeleteFolder(item.id);
-              }}
-            >
-              <Trash2 color="#ef4444" size={18} />
-            </TouchableOpacity>
-          )}
-          <ChevronRight color="#64748b" size={20} />
-        </View>
+        {viewMode === 'list' && (
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleOpenContextMenu(item.id, 'folder');
+            }}
+          >
+            <MoreVertical color={colors.gray[600]} size={20} />
+          </TouchableOpacity>
+        )}
       </TouchableOpacity>
     );
   };
@@ -574,76 +888,94 @@ export default function DocumentsScreen() {
   const renderDocument = ({ item }: { item: Document }) => {
     const isCourseDocument = item.id >= 100;
     const showPermissionsButton = isCourseDocument && canManagePermissions;
+    const FileIconComponent = getFileIcon(item.type);
+    const iconColor = getTypeColor(item.type);
 
     return (
-      <View style={styles.documentCard}>
-        <View style={styles.documentInfo}>
-          <Text style={styles.documentName}>{item.nameDoc}</Text>
-          <View style={styles.documentMeta}>
-            <View style={[styles.typeBadge, { backgroundColor: getTypeColor(item.type) + '20' }]}>
-              <Text style={[styles.typeText, { color: getTypeColor(item.type) }]}>
-                {item.type}
-              </Text>
+      <TouchableOpacity
+        style={viewMode === 'grid' ? styles.documentCardGrid : styles.documentCard}
+        onPress={() => handleViewDocument(item.id)}
+        activeOpacity={0.7}
+      >
+        {viewMode === 'list' && (
+          <View style={styles.documentIconContainer}>
+            <FileIconComponent
+              color={iconColor}
+              size={24}
+              fill={iconColor}
+            />
+          </View>
+        )}
+        <View style={[styles.documentInfo, viewMode === 'grid' && styles.documentInfoGrid]}>
+          {viewMode === 'grid' && (
+            <View style={[styles.documentIconContainer, styles.documentIconContainerGrid]}>
+              <FileIconComponent
+                color={iconColor}
+                size={48}
+                fill={iconColor}
+              />
             </View>
-            <Text style={styles.metaText}>{item.length}</Text>
-            <Text style={styles.metaText}>{item.date}</Text>
+          )}
+          <Text style={[
+            styles.documentName,
+            viewMode === 'grid' && styles.documentNameGrid
+          ]} numberOfLines={viewMode === 'grid' ? 2 : 1}>
+            {item.nameDoc}
+          </Text>
+          <View style={styles.documentMeta}>
+            {viewMode === 'list' && (
+              <>
+                <Text style={styles.metaText}>{item.length}</Text>
+                <Text style={styles.metaText}>{item.date}</Text>
+              </>
+            )}
+            {viewMode === 'grid' && (
+              <Text style={styles.metaText}>{item.length}</Text>
+            )}
           </View>
         </View>
-        <View style={styles.actions}>
+        {viewMode === 'list' ? (
           <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => {
-              console.log('👁️ View button clicked for document:', {
-                id: item.id,
-                name: item.nameDoc,
-                type: item.type,
-              });
-              handleViewDocument(item.id);
+            style={styles.menuButton}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleOpenContextMenu(item.id, 'document');
             }}
           >
-            <Eye color="#64748b" size={18} />
+            <MoreVertical color={colors.gray[600]} size={20} />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => {
-              console.log('⬇️ Download button clicked for document:', {
-                id: item.id,
-                name: item.nameDoc,
-                type: item.type,
-              });
-              handleDownloadDocument(item.id, item.nameDoc);
-            }}
-          >
-            <Download color="#64748b" size={18} />
-          </TouchableOpacity>
-          {showPermissionsButton && (
+        ) : (
+          <View style={[styles.actions, styles.actionsGrid]}>
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => {
-                console.log('🔒 Permissions button clicked for document:', {
-                  id: item.id,
-                  name: item.nameDoc,
-                });
-                handleOpenPermissionsModal(item);
+              onPress={(e) => {
+                e.stopPropagation();
+                handleViewDocument(item.id);
               }}
             >
-              <Lock color="#3b82f6" size={18} />
+              <Eye color={colors.gray[600]} size={18} strokeWidth={2} />
             </TouchableOpacity>
-          )}
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => {
-              console.log('🗑️ Delete button clicked for document:', {
-                id: item.id,
-                name: item.nameDoc,
-              });
-              handleDeleteDocument(item.id);
-            }}
-          >
-            <Trash2 color="#ef4444" size={18} />
-          </TouchableOpacity>
-        </View>
-      </View>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleDownloadDocument(item.id, item.nameDoc);
+              }}
+            >
+              <Download color={colors.gray[600]} size={18} strokeWidth={2} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleOpenDeleteDocumentModal(item.id);
+              }}
+            >
+              <Trash2 color={colors.error} size={18} strokeWidth={2} />
+            </TouchableOpacity>
+          </View>
+        )}
+      </TouchableOpacity>
     );
   };
 
@@ -655,8 +987,8 @@ export default function DocumentsScreen() {
   if (loadingUser) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={{ marginTop: 16, color: '#64748b' }}>Chargement...</Text>
+        <ActivityIndicator size="large" color={colors.navy} />
+        <Text style={{ marginTop: spacing[4], color: colors.gray[600] }}>Chargement...</Text>
       </View>
     );
   }
@@ -694,12 +1026,28 @@ export default function DocumentsScreen() {
               </View>
             </View>
             <View style={styles.headerActions}>
+              {/* View Mode Toggle */}
+              <View style={styles.viewModeToggle}>
+                <TouchableOpacity
+                  style={[styles.viewModeButton, viewMode === 'list' && styles.viewModeButtonActive]}
+                  onPress={() => setViewMode('list')}
+                >
+                  <List color={viewMode === 'list' ? colors.white : colors.navy} size={20} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.viewModeButton, viewMode === 'grid' && styles.viewModeButtonActive]}
+                  onPress={() => setViewMode('grid')}
+                >
+                  <Grid3x3 color={viewMode === 'grid' ? colors.white : colors.navy} size={20} />
+                </TouchableOpacity>
+              </View>
+
               {documents.length > 0 && isAdminMember && (
                 <TouchableOpacity
                   style={[styles.addButton, styles.downloadAllButton]}
                   onPress={handleDownloadAllDocuments}
                 >
-                  <FolderDown color="#2563eb" size={20} />
+                  <FolderDown color={colors.navy} size={20} />
                   <Text style={[styles.addButtonText, styles.downloadAllButtonText]}>
                     Télécharger tout ({documents.length})
                   </Text>
@@ -709,14 +1057,14 @@ export default function DocumentsScreen() {
                 style={styles.createFolderButton}
                 onPress={() => setShowCreateFolderModal(true)}
               >
-                <FolderIcon color="#2563eb" size={20} />
+                <FolderIcon color={colors.navy} size={20} />
                 <Text style={styles.createFolderButtonText}>Nouveau dossier</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.addButton}
                 onPress={() => setShowAddModal(true)}
               >
-                <Plus color="#fff" size={20} />
+                <Plus color={colors.white} size={20} />
                 <Text style={styles.addButtonText}>Ajouter un document</Text>
               </TouchableOpacity>
             </View>
@@ -725,7 +1073,7 @@ export default function DocumentsScreen() {
           <View style={styles.listContent}>
             {loadingDocuments ? (
               <View style={styles.emptyState}>
-                <ActivityIndicator size="large" color="#2563eb" />
+                <ActivityIndicator size="large" color={colors.navy} />
                 <Text style={styles.emptyStateText}>Chargement des documents...</Text>
               </View>
             ) : (
@@ -739,9 +1087,16 @@ export default function DocumentsScreen() {
                   return visibleFolders.length > 0 ? (
                     <View style={styles.section}>
                       <Text style={styles.sectionTitle}>Dossiers</Text>
-                      {visibleFolders.map((folder) => (
-                        <View key={folder.id}>{renderFolder({ item: folder })}</View>
-                      ))}
+                      <View style={viewMode === 'grid' ? styles.gridContainer : null}>
+                        {visibleFolders.map((folder) => (
+                          <View
+                            key={folder.id}
+                            style={viewMode === 'grid' ? styles.gridItem : null}
+                          >
+                            {renderFolder({ item: folder })}
+                          </View>
+                        ))}
+                      </View>
                     </View>
                   ) : null;
                 })()}
@@ -750,13 +1105,20 @@ export default function DocumentsScreen() {
                 {currentDocuments.length > 0 ? (
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Documents</Text>
-                    {currentDocuments.map((doc) => (
-                      <View key={doc.id}>{renderDocument({ item: doc })}</View>
-                    ))}
+                    <View style={viewMode === 'grid' ? styles.gridContainer : null}>
+                      {currentDocuments.map((doc) => (
+                        <View
+                          key={doc.id}
+                          style={viewMode === 'grid' ? styles.gridItem : null}
+                        >
+                          {renderDocument({ item: doc })}
+                        </View>
+                      ))}
+                    </View>
                   </View>
                 ) : folders.filter((f) => f.parentId === currentFolderId).length === 0 ? (
                   <View style={styles.emptyState}>
-                    <FolderIcon color="#cbd5e1" size={64} />
+                    <FolderIcon color={colors.gray[400]} size={64} />
                     <Text style={styles.emptyStateText}>Aucun document ni dossier</Text>
                   </View>
                 ) : null}
@@ -810,7 +1172,7 @@ export default function DocumentsScreen() {
       >
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#2563eb" />
+            <ActivityIndicator size="large" color={colors.navy} />
             <Text style={styles.loadingText}>Upload du document en cours...</Text>
           </View>
         </View>
@@ -829,7 +1191,7 @@ export default function DocumentsScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Gestion des permissions</Text>
               <TouchableOpacity onPress={handleClosePermissionsModal} style={styles.closeButton}>
-                <X color="#64748b" size={24} />
+                <X color={colors.gray[600]} size={24} />
               </TouchableOpacity>
             </View>
 
@@ -855,8 +1217,8 @@ export default function DocumentsScreen() {
                   <Switch
                     value={hasAccess(cadet.id)}
                     onValueChange={() => handleTogglePermission(cadet.id)}
-                    trackColor={{ false: '#cbd5e1', true: '#3b82f6' }}
-                    thumbColor={hasAccess(cadet.id) ? '#2563eb' : '#f1f5f9'}
+                    trackColor={{ false: colors.gray[400], true: colors.navy }}
+                    thumbColor={hasAccess(cadet.id) ? colors.navyLight : colors.gray[100]}
                   />
                 </View>
               ))}
@@ -885,6 +1247,112 @@ export default function DocumentsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Context Menu Modal */}
+      <Modal
+        visible={showContextMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={handleCloseContextMenu}
+      >
+        <TouchableOpacity
+          style={styles.contextMenuOverlay}
+          activeOpacity={1}
+          onPress={handleCloseContextMenu}
+        >
+          <View style={styles.contextMenuContainer}>
+            {contextMenuType === 'document' ? (
+              <>
+                <TouchableOpacity
+                  style={styles.contextMenuItem}
+                  onPress={() => handleContextMenuAction('view')}
+                >
+                  <Eye color={colors.gray[700]} size={20} />
+                  <Text style={styles.contextMenuText}>Ouvrir</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.contextMenuItem}
+                  onPress={() => handleContextMenuAction('download')}
+                >
+                  <Download color={colors.gray[700]} size={20} />
+                  <Text style={styles.contextMenuText}>Télécharger</Text>
+                </TouchableOpacity>
+                {selectedItemId && selectedItemId >= 100 && canManagePermissions && (
+                  <TouchableOpacity
+                    style={styles.contextMenuItem}
+                    onPress={() => handleContextMenuAction('permissions')}
+                  >
+                    <Lock color={colors.gray[700]} size={20} />
+                    <Text style={styles.contextMenuText}>Gérer les permissions</Text>
+                  </TouchableOpacity>
+                )}
+                <View style={styles.contextMenuDivider} />
+                <TouchableOpacity
+                  style={styles.contextMenuItem}
+                  onPress={() => handleContextMenuAction('delete')}
+                >
+                  <Trash2 color={colors.error} size={20} />
+                  <Text style={[styles.contextMenuText, { color: colors.error }]}>Supprimer</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={styles.contextMenuItem}
+                  onPress={() => handleContextMenuAction('open')}
+                >
+                  <FolderIcon color={colors.gray[700]} size={20} />
+                  <Text style={styles.contextMenuText}>Ouvrir</Text>
+                </TouchableOpacity>
+                <View style={styles.contextMenuDivider} />
+                <TouchableOpacity
+                  style={styles.contextMenuItem}
+                  onPress={() => handleContextMenuAction('delete')}
+                >
+                  <Trash2 color={colors.error} size={20} />
+                  <Text style={[styles.contextMenuText, { color: colors.error }]}>Supprimer</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Delete Folder Modal */}
+      <DeleteFolderModal
+        visible={showDeleteFolderModal}
+        onClose={() => {
+          setShowDeleteFolderModal(false);
+          setFolderToDelete(null);
+        }}
+        onConfirm={handleConfirmDeleteFolder}
+        folderName={folderToDelete?.name || ''}
+        documentsCount={folderToDelete?.documentsCount || 0}
+        childrenCount={folderToDelete?.childrenCount || 0}
+        isDeleting={isDeletingFolder}
+      />
+
+      {/* Delete Document Modal */}
+      <DeleteDocumentModal
+        visible={showDeleteDocumentModal}
+        onClose={() => {
+          setShowDeleteDocumentModal(false);
+          setDocumentToDelete(null);
+        }}
+        onConfirm={handleConfirmDeleteDocument}
+        documentName={documentToDelete?.name || ''}
+        documentType={documentToDelete?.type || 'PDF'}
+        documentSize={documentToDelete?.size || ''}
+        isDeleting={isDeletingDocument}
+      />
+
+      {/* Toast Notification */}
+      <Toast
+        visible={showToast}
+        message={toastMessage}
+        type={toastType}
+        onHide={() => setShowToast(false)}
+      />
     </View>
   );
 }
@@ -892,21 +1360,21 @@ export default function DocumentsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#F5F5F5',
   },
   header: {
     flexDirection: isMobile ? 'column' : 'row',
     justifyContent: 'space-between',
     alignItems: isMobile ? 'stretch' : 'center',
     padding: getResponsivePadding(),
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    gap: isMobile ? 12 : 0,
+    paddingBottom: spacing[4],
+    gap: isMobile ? spacing[3] : 0,
+    backgroundColor: colors.white,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing[3],
     flex: 1,
   },
   headerTitleSection: {
@@ -915,160 +1383,256 @@ const styles = StyleSheet.create({
   breadcrumb: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 4,
+    marginTop: spacing[1],
+    marginBottom: spacing[1],
   },
   breadcrumbItem: {
-    fontSize: 14,
-    color: '#64748b',
+    fontSize: getFontSize(14),
+    color: colors.gray[600],
     fontWeight: '500',
   },
   breadcrumbActive: {
-    color: '#2563eb',
-    fontWeight: '600',
+    color: colors.navy,
+    fontWeight: '700',
   },
   breadcrumbSeparator: {
-    fontSize: 14,
-    color: '#cbd5e1',
-    marginHorizontal: 8,
+    fontSize: getFontSize(14),
+    color: colors.gray[400],
+    marginHorizontal: spacing[2],
+    fontWeight: '500',
   },
   headerActions: {
     flexDirection: isMobile ? 'column' : 'row',
-    gap: isMobile ? 8 : 8,
+    gap: spacing[2],
     width: isMobile ? '100%' : 'auto',
+  },
+  viewModeToggle: {
+    flexDirection: 'row',
+    backgroundColor: colors.gray[100],
+    borderRadius: borderRadius.md,
+    padding: spacing[1],
+    gap: spacing[1],
+  },
+  viewModeButton: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: borderRadius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: isMobile ? MIN_TOUCH_TARGET : 44,
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 36,
+  },
+  viewModeButtonActive: {
+    backgroundColor: colors.navy,
   },
   backButton: {
     width: 32,
     height: 32,
-    borderRadius: 8,
-    backgroundColor: '#eff6ff',
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.navyLight + '20',
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
-    fontSize: getFontSize(isMobile ? 20 : 24),
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 4,
+    fontSize: getFontSize(20),
+    fontWeight: '400',
+    color: '#202124',
+    marginBottom: spacing[1],
   },
   subtitle: {
-    fontSize: getFontSize(isMobile ? 12 : 14),
-    color: '#64748b',
+    fontSize: getFontSize(13),
+    color: '#5f6368',
+    fontWeight: '400',
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#2563eb',
-    paddingHorizontal: getSpacing(16),
-    paddingVertical: isMobile ? 14 : 10,
-    borderRadius: 8,
-    gap: 8,
+    backgroundColor: colors.navy,
+    paddingHorizontal: spacing[4],
+    paddingVertical: isMobile ? 14 : spacing[2],
+    borderRadius: borderRadius.md,
+    gap: spacing[2],
     minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   createFolderButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#eff6ff',
-    paddingHorizontal: getSpacing(16),
-    paddingVertical: isMobile ? 14 : 10,
-    borderRadius: 8,
-    gap: 8,
+    backgroundColor: colors.navyLight + '20',
+    paddingHorizontal: spacing[4],
+    paddingVertical: isMobile ? 14 : spacing[2],
+    borderRadius: borderRadius.md,
+    gap: spacing[2],
     borderWidth: 2,
-    borderColor: '#2563eb',
+    borderColor: colors.navy,
     minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   createFolderButtonText: {
-    color: '#2563eb',
-    fontSize: getFontSize(14),
+    color: colors.navy,
+    ...textStyles.label,
     fontWeight: '600',
   },
   addButtonText: {
-    color: '#fff',
-    fontSize: getFontSize(14),
+    color: colors.white,
+    ...textStyles.label,
     fontWeight: '600',
   },
   downloadAllButton: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: colors.navyLight + '20',
     borderWidth: 2,
-    borderColor: '#bfdbfe',
+    borderColor: colors.navy + '40',
   },
   downloadAllButtonText: {
-    color: '#2563eb',
+    color: colors.navy,
   },
   scrollContent: {
     padding: getResponsivePadding(),
   },
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
     overflow: 'hidden',
   },
   listContent: {
     padding: getResponsivePadding(),
   },
   section: {
-    marginBottom: 24,
+    marginBottom: spacing[6],
   },
   sectionTitle: {
-    fontSize: getFontSize(16),
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 12,
+    fontSize: getFontSize(14),
+    fontWeight: '500',
+    color: '#5f6368',
+    marginBottom: spacing[3],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -spacing[1.5],
+  },
+  gridItem: {
+    width: isMobile ? '50%' : '25%',
+    paddingHorizontal: spacing[2],
+    marginBottom: spacing[4],
   },
   folderCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: getSpacing(16),
-    marginBottom: 12,
+    backgroundColor: 'transparent',
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[1],
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 48,
+  },
+  folderCardGrid: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing[4],
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
+    shadowRadius: 3,
+    elevation: 2,
+    height: '100%',
   },
   folderIcon: {
-    marginRight: 16,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing[3],
+    position: 'relative',
+  },
+  folderIconGrid: {
+    width: 48,
+    height: 48,
+    marginRight: 0,
+    marginBottom: spacing[3],
+    alignSelf: 'flex-start',
+  },
+  folderIconEmoji: {
+    fontSize: 24,
+  },
+  restrictedBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing[1],
+    ...shadows.sm,
+  },
+  folderCardRestricted: {
+    opacity: 0.6,
+    backgroundColor: colors.gray[50],
   },
   folderInfo: {
     flex: 1,
   },
+  folderInfoGrid: {
+    alignItems: 'center',
+    textAlign: 'center',
+  },
   folderHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
+    gap: spacing[2],
+    marginBottom: spacing[1],
+    flexWrap: 'wrap',
   },
   folderName: {
-    fontSize: getFontSize(16),
-    fontWeight: '600',
-    color: '#1e293b',
+    fontSize: getFontSize(14),
+    fontWeight: '400',
+    color: '#202124',
+    lineHeight: 20,
+  },
+  folderNameGrid: {
+    fontSize: getFontSize(14),
+    lineHeight: 20,
+    fontWeight: '400',
+    color: '#202124',
+  },
+  folderNameRestricted: {
+    color: colors.gray[500],
+  },
+  visibilityIcon: {
+    fontSize: 14,
+    marginLeft: spacing[1],
+  },
+  folderDescription: {
+    fontSize: getFontSize(14),
+    color: colors.gray[600],
+    marginBottom: spacing[2],
+    lineHeight: 20,
   },
   folderMeta: {
     fontSize: getFontSize(12),
-    color: '#64748b',
+    color: '#5f6368',
+    fontWeight: '400',
   },
   folderActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing[2],
   },
   roleBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    gap: 4,
+    paddingHorizontal: spacing[2],
+    paddingVertical: spacing[1],
+    borderRadius: borderRadius.sm,
+    gap: spacing[1],
   },
   roleIcon: {
     fontSize: 12,
@@ -1080,69 +1644,120 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    paddingVertical: spacing[15],
   },
   emptyStateText: {
-    fontSize: getFontSize(16),
-    color: '#94a3b8',
-    marginTop: 16,
+    ...textStyles.h4,
+    color: colors.gray[500],
+    marginTop: spacing[4],
     textAlign: 'center',
-    paddingHorizontal: getSpacing(20),
+    paddingHorizontal: spacing[5],
   },
   documentCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: getSpacing(16),
-    marginBottom: 12,
+    backgroundColor: 'transparent',
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+    marginBottom: spacing[1],
     flexDirection: isMobile ? 'column' : 'row',
     justifyContent: 'space-between',
     alignItems: isMobile ? 'stretch' : 'center',
+    gap: isMobile ? spacing[3] : 0,
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 48,
+  },
+  documentCardGrid: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing[4],
+    flexDirection: 'column',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    gap: isMobile ? 12 : 0,
+    shadowRadius: 3,
+    elevation: 2,
+    height: '100%',
+  },
+  documentIconContainer: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing[3],
+  },
+  documentIconContainerGrid: {
+    width: 48,
+    height: 48,
+    marginRight: 0,
+    marginBottom: spacing[3],
+    alignSelf: 'flex-start',
   },
   documentInfo: {
     flex: 1,
   },
+  documentInfoGrid: {
+    alignItems: 'flex-start',
+    width: '100%',
+  },
   documentName: {
-    fontSize: getFontSize(16),
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 8,
+    fontSize: getFontSize(14),
+    fontWeight: '400',
+    color: '#202124',
+    lineHeight: 20,
+  },
+  documentNameGrid: {
+    fontSize: getFontSize(14),
+    lineHeight: 20,
+    fontWeight: '400',
+    color: '#202124',
+    marginBottom: spacing[2],
   },
   documentMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing[3],
     flexWrap: 'wrap',
   },
   typeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    paddingHorizontal: spacing[2.5],
+    paddingVertical: spacing[1.5],
+    borderRadius: borderRadius.md,
   },
   typeText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: getFontSize(12),
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   metaText: {
-    fontSize: 12,
-    color: '#64748b',
+    fontSize: getFontSize(12),
+    color: '#5f6368',
+    fontWeight: '400',
   },
   actions: {
     flexDirection: 'row',
-    gap: 8,
+    gap: spacing[2.5],
     flexWrap: 'wrap',
     justifyContent: isMobile ? 'flex-start' : 'flex-end',
   },
+  actionsGrid: {
+    justifyContent: 'center',
+    marginTop: 'auto',
+  },
   actionButton: {
-    width: isMobile ? MIN_TOUCH_TARGET : 36,
-    height: isMobile ? MIN_TOUCH_TARGET : 36,
-    borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+    width: isMobile ? MIN_TOUCH_TARGET : 32,
+    height: isMobile ? MIN_TOUCH_TARGET : 32,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButton: {
+    backgroundColor: 'transparent',
+  },
+  menuButton: {
+    width: isMobile ? MIN_TOUCH_TARGET : 32,
+    height: isMobile ? MIN_TOUCH_TARGET : 32,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1152,21 +1767,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: isMobile ? 'flex-end' : 'center',
     alignItems: 'center',
-    padding: isMobile ? 0 : 20,
+    padding: isMobile ? 0 : spacing[5],
   },
   permissionsModalContainer: {
-    backgroundColor: '#fff',
-    borderRadius: isMobile ? 16 : 16,
-    borderBottomLeftRadius: isMobile ? 0 : 16,
-    borderBottomRightRadius: isMobile ? 0 : 16,
+    backgroundColor: colors.white,
+    borderRadius: isMobile ? borderRadius.xl : borderRadius.xl,
+    borderBottomLeftRadius: isMobile ? 0 : borderRadius.xl,
+    borderBottomRightRadius: isMobile ? 0 : borderRadius.xl,
     width: '100%',
     maxWidth: isMobile ? '100%' : 500,
     maxHeight: isMobile ? '90%' : '80%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 5,
+    ...shadows.lg,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1174,15 +1785,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: getResponsivePadding(),
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: colors.border,
   },
   modalTitle: {
-    fontSize: getFontSize(isMobile ? 18 : 20),
-    fontWeight: 'bold',
-    color: '#1e293b',
+    ...textStyles.h3,
+    color: colors.navy,
   },
   closeButton: {
-    padding: 4,
+    padding: spacing[1],
     minWidth: isMobile ? MIN_TOUCH_TARGET : 'auto',
     minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
     alignItems: 'center',
@@ -1191,64 +1801,62 @@ const styles = StyleSheet.create({
   documentNameSection: {
     padding: getResponsivePadding(),
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: colors.border,
   },
   documentNameLabel: {
-    fontSize: 12,
+    ...textStyles.caption,
     fontWeight: '600',
-    color: '#64748b',
-    marginBottom: 4,
+    color: colors.gray[600],
+    marginBottom: spacing[1],
   },
   documentNameValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
+    ...textStyles.h4,
+    color: colors.navy,
   },
   cadetsList: {
     flex: 1,
     padding: getResponsivePadding(),
   },
   cadetsListTitle: {
-    fontSize: getFontSize(14),
+    ...textStyles.label,
     fontWeight: '600',
-    color: '#334155',
-    marginBottom: 16,
+    color: colors.navy,
+    marginBottom: spacing[4],
   },
   cadetItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: isMobile ? 16 : 12,
+    paddingVertical: isMobile ? spacing[4] : spacing[3],
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: colors.gray[100],
     minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   cadetInfo: {
     flex: 1,
   },
   cadetName: {
-    fontSize: getFontSize(16),
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 2,
+    ...textStyles.h4,
+    color: colors.navy,
+    marginBottom: spacing[1],
   },
   cadetRole: {
-    fontSize: getFontSize(12),
-    color: '#64748b',
+    ...textStyles.caption,
+    color: colors.gray[600],
   },
   emptyText: {
-    fontSize: 14,
-    color: '#94a3b8',
+    ...textStyles.body,
+    color: colors.gray[500],
     textAlign: 'center',
     fontStyle: 'italic',
-    marginTop: 20,
+    marginTop: spacing[5],
   },
   modalFooter: {
     flexDirection: isMobile ? 'column' : 'row',
     padding: getResponsivePadding(),
-    gap: 12,
+    gap: spacing[3],
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: colors.border,
   },
   footerButton: {
     flex: 1,
@@ -1260,16 +1868,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingContainer: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 30,
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    padding: spacing[8],
     alignItems: 'center',
-    gap: 16,
+    gap: spacing[4],
     minWidth: 200,
   },
   loadingText: {
-    fontSize: getFontSize(16),
-    color: '#1e293b',
-    fontWeight: '500',
+    ...textStyles.h4,
+    color: colors.navy,
+  },
+  // Context Menu Styles
+  contextMenuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing[4],
+  },
+  contextMenuContainer: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    minWidth: 200,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    overflow: 'hidden',
+  },
+  contextMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing[4],
+    gap: spacing[3],
+    minHeight: isMobile ? MIN_TOUCH_TARGET : 48,
+    backgroundColor: colors.white,
+  },
+  contextMenuText: {
+    fontSize: getFontSize(14),
+    color: colors.gray[700],
+    fontWeight: '400',
+  },
+  contextMenuDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing[1],
   },
 });

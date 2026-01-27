@@ -2,42 +2,41 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
+  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   ScrollView,
-  StatusBar,
   ActivityIndicator,
+  StyleSheet,
 } from 'react-native';
-import { Mail, Lock } from 'lucide-react-native';
+import { Eye, EyeOff, LogIn } from 'lucide-react-native';
 import { LoginData, User } from '../../types';
 import { isWeb } from '../../utils/responsive';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
-import { AuthApi, ApiError, mapBackendRoleToFrontend } from '../../api';
+import { AuthApi, ApiError } from '../../api';
 import { tokenStorage } from '../../api/tokenStorage';
+import { colors, textStyles, spacing, borderRadius, shadows } from '../../theme';
 
 interface LoginScreenProps {
   onLogin: (user: User) => void;
   onNavigateToSign?: () => void;
   onNavigateToOrgSignup?: () => void;
+  onNavigateToMemberSignup?: () => void;
 }
 
-export default function LoginScreen({ onLogin, onNavigateToSign, onNavigateToOrgSignup }: LoginScreenProps) {
+export default function LoginScreen({ onLogin, onNavigateToSign, onNavigateToOrgSignup, onNavigateToMemberSignup }: LoginScreenProps) {
   const [loginData, setLoginData] = useState<LoginData>({ email: '', password: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
-  const [hasError, setHasError] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
     if (!loginData.email || !loginData.password) {
       setErrorMessage('Veuillez remplir tous les champs');
-      setHasError(true);
       return;
     }
 
-    setErrorMessage(''); // Réinitialiser le message d'erreur
-    setHasError(false);
+    setErrorMessage('');
     setIsLoading(true);
 
     try {
@@ -55,13 +54,13 @@ export default function LoginScreen({ onLogin, onNavigateToSign, onNavigateToOrg
           expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1h
         });
 
-        // Garder l'objet role tel quel (ne pas le mapper en string)
+        // Créer l'objet user
         const user: User = {
           id: response.data.user.id,
           lastname: response.data.user.lastName || response.data.user.lastname || '',
           firstname: response.data.user.firstName || response.data.user.firstname || '',
           email: response.data.user.email,
-          role: response.data.user.role, // Garder l'objet role complet
+          role: response.data.user.role,
           statut: response.data.user.isActive ? 'Actif' : 'Inactif',
           phone: response.data.user.phone || '',
           isSuperAdmin: response.data.user.isSuperAdmin,
@@ -77,7 +76,6 @@ export default function LoginScreen({ onLogin, onNavigateToSign, onNavigateToOrg
       let displayErrorMessage = 'Email ou mot de passe incorrect';
 
       if (error instanceof ApiError) {
-        // Vérifier les codes d'erreur spécifiques du backend
         if (error.message.includes('compte n\'est pas encore activé') ||
             error.message.includes('ACCOUNT_INACTIVE')) {
           displayErrorMessage =
@@ -98,193 +96,287 @@ export default function LoginScreen({ onLogin, onNavigateToSign, onNavigateToOrg
       }
 
       setErrorMessage(displayErrorMessage);
-      setHasError(true);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const paddingTop = isWeb ? 0 : Platform.OS === 'ios' ? 100 : (StatusBar.currentHeight || 0) + 90;
-  const headerPaddingTop = isWeb ? 10 : Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 0) + 10;
-
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={{
-        flex: 1,
-        backgroundColor: '#2563eb'
-      }}
+      style={styles.container}
     >
-      <View
-        style={{
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          width: '100%',
-          paddingHorizontal: isWeb ? 20 : 16,
-          paddingTop: headerPaddingTop,
-          paddingBottom: isWeb ? 20 : 12,
-          zIndex: 1000,
-        }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-          <View
-            style={{
-              width: isWeb ? 60 : 45,
-              height: isWeb ? 60 : 45,
-              backgroundColor: '#fff',
-              borderRadius: isWeb ? 15 : 12,
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <Text style={{ fontSize: isWeb ? 30 : 22, color: '#2563eb', fontWeight: 'bold' }}>M</Text>
-          </View>
-          <View>
-            <Text style={{ fontSize: isWeb ? 28 : 20, color: '#fff', fontWeight: 'bold', marginBottom: 4 }}>CadetApp</Text>
-            <Text style={{ fontSize: isWeb ? 14 : 12, color: '#bfdbfe' }}>Devenir cadet de la somme</Text>
-          </View>
-        </View>
-        <Button
-          variant="ghost"
-          size={isWeb ? "default" : "sm"}
-          onPress={onNavigateToSign}
-          style={{ backgroundColor: 'transparent' }}
-        >
-          <Text style={{ fontSize: isWeb ? 14 : 12, color: '#fff', fontWeight: '600' }}>S'inscrire</Text>
-        </Button>
-      </View>
-
       <ScrollView
-        style={{ flex: 1, paddingTop }}
-        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <View style={{ width: '100%', maxWidth: 500, alignSelf: 'center' }}>
-          <View
-            style={{
-              backgroundColor: '#fff',
-              padding: 24,
-              borderRadius: 20,
-              ...(isWeb ? {
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: 20 },
-                shadowOpacity: 0.3,
-                shadowRadius: 30,
-                elevation: 10,
-              } : {})
-            }}
-          >
-            <Text style={{ fontSize: 24, color: '#1e293b', fontWeight: 'bold', marginBottom: 24 }}>Connexion</Text>
-
-            {/* Message d'erreur */}
-            {errorMessage && (
-              <View style={{
-                padding: 12,
-                marginBottom: 16,
-                backgroundColor: '#fef2f2',
-                borderRadius: 8,
-                borderLeftWidth: 4,
-                borderLeftColor: '#dc2626'
-              }}>
-                <Text style={{ fontSize: 13, color: '#dc2626', lineHeight: 18 }}>
-                  {errorMessage}
-                </Text>
-              </View>
-            )}
-
-            <View style={{ marginBottom: 16 }}>
-              <Input
-                label="Adresse email"
-                placeholder="votre@email.com"
-                value={loginData.email}
-                onChangeText={(text) => {
-                  setLoginData({ ...loginData, email: text });
-                  if (errorMessage) {
-                    setErrorMessage('');
-                    setHasError(false);
-                  }
-                }}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                onSubmitEditing={handleLogin}
-                leftIcon={<Mail color="#94a3b8" size={20} />}
-                wrapperStyle={hasError ? {
-                  borderColor: '#dc2626',
-                  borderWidth: 2,
-                } : {}}
-              />
-            </View>
-
-            <View style={{ marginBottom: 16 }}>
-              <Input
-                label="Mot de passe"
-                placeholder="••••••••"
-                value={loginData.password}
-                onChangeText={(text) => {
-                  setLoginData({ ...loginData, password: text });
-                  if (errorMessage) {
-                    setErrorMessage('');
-                    setHasError(false);
-                  }
-                }}
-                secureTextEntry
-                onSubmitEditing={handleLogin}
-                leftIcon={<Lock color="#94a3b8" size={20} />}
-                wrapperStyle={hasError ? {
-                  borderColor: '#dc2626',
-                  borderWidth: 2,
-                } : {}}
-              />
-            </View>
-
-            <Button
-              variant="default"
-              size="lg"
-              onPress={handleLogin}
-              style={{ marginTop: 8 }}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <ActivityIndicator color="#fff" />
-                  <Text style={{ color: '#fff', fontWeight: '600' }}>Connexion...</Text>
-                </View>
-              ) : (
-                'Se connecter'
-              )}
-            </Button>
-
-            <View style={{ padding: 16, marginTop: 20, backgroundColor: '#fef3c7', borderRadius: 8, borderLeftWidth: 4, borderLeftColor: '#f59e0b' }}>
-              <Text style={{ fontSize: 13, color: '#92400e', fontWeight: '600', marginBottom: 8 }}>ℹ️ Compte en attente de validation ?</Text>
-              <Text style={{ fontSize: 12, color: '#92400e', lineHeight: 18 }}>
-                Si vous venez de vous inscrire, votre compte doit être validé par un administrateur avant de pouvoir vous connecter.{'\n\n'}
-                Vous recevrez un email de confirmation dès que votre compte sera activé.
+        <View style={styles.formContainer}>
+          <View style={styles.card}>
+            {/* Titre et sous-titre */}
+            <View style={styles.headerSection}>
+              <Text style={styles.title}>Connexion</Text>
+              <Text style={styles.subtitle}>
+                Entrez vos identifiants pour accéder à votre espace
               </Text>
             </View>
 
-            {/* Lien vers inscription organisation */}
-            {onNavigateToOrgSignup && (
-              <View style={{ marginTop: 24, paddingTop: 24, borderTopWidth: 1, borderTopColor: '#e2e8f0', alignItems: 'center' }}>
-                <Text style={{ fontSize: 14, color: '#64748b', marginBottom: 8 }}>
-                  Vous êtes une association ?
-                </Text>
-                <Button
-                  variant="outline"
-                  onPress={onNavigateToOrgSignup}
-                  style={{ minWidth: 200 }}
-                >
-                  Créer votre espace association
-                </Button>
+            {/* Message d'erreur */}
+            {errorMessage ? (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>{errorMessage}</Text>
               </View>
-            )}
+            ) : null}
+
+            {/* Champ Email */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="votre@email.com"
+                placeholderTextColor={colors.gray[400]}
+                value={loginData.email}
+                onChangeText={(text) => {
+                  setLoginData({ ...loginData, email: text });
+                  if (errorMessage) setErrorMessage('');
+                }}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                onSubmitEditing={handleLogin}
+              />
+            </View>
+
+            {/* Champ Mot de passe */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Mot de passe</Text>
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="••••••••"
+                  placeholderTextColor={colors.gray[400]}
+                  value={loginData.password}
+                  onChangeText={(text) => {
+                    setLoginData({ ...loginData, password: text });
+                    if (errorMessage) setErrorMessage('');
+                  }}
+                  secureTextEntry={!showPassword}
+                  onSubmitEditing={handleLogin}
+                />
+                <TouchableOpacity
+                  style={styles.eyeIcon}
+                  onPress={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff color={colors.gray[500]} size={22} />
+                  ) : (
+                    <Eye color={colors.gray[500]} size={22} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Mot de passe oublié */}
+            <TouchableOpacity style={styles.forgotPassword}>
+              <Text style={styles.forgotPasswordText}>Mot de passe oublié ?</Text>
+            </TouchableOpacity>
+
+            {/* Bouton Se connecter */}
+            <TouchableOpacity
+              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
+              onPress={handleLogin}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <ActivityIndicator color={colors.white} size="small" />
+              ) : (
+                <>
+                  <LogIn color={colors.white} size={20} />
+                  <Text style={styles.loginButtonText}>Se connecter</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {/* Séparateur */}
+            <View style={styles.divider}>
+              <Text style={styles.dividerText}>PAS ENCORE INSCRIT ?</Text>
+            </View>
+
+            {/* Boutons d'inscription */}
+            <View style={styles.signupButtons}>
+              <TouchableOpacity
+                style={styles.outlineButton}
+                onPress={onNavigateToOrgSignup}
+              >
+                <Text style={styles.outlineButtonText}>Inscrire une association</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.outlineButton}
+                onPress={onNavigateToMemberSignup}
+              >
+                <Text style={styles.outlineButtonText}>S'inscrire comme membre</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.outlineButton}
+                onPress={onNavigateToSign}
+              >
+                <Text style={styles.outlineButtonText}>Devenir cadet</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.muted,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: spacing[4],
+    paddingVertical: spacing[10],
+  },
+  formContainer: {
+    width: '100%',
+    maxWidth: 500,
+    alignSelf: 'center',
+  },
+  card: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius['3xl'],
+    padding: spacing[10],
+    ...shadows.lg,
+  },
+  headerSection: {
+    marginBottom: spacing[8],
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: colors.foreground,
+    marginBottom: spacing[3],
+    textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: colors.gray[600],
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  errorBox: {
+    backgroundColor: colors.errorLight,
+    padding: spacing[4],
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing[6],
+    borderLeftWidth: 4,
+    borderLeftColor: colors.error,
+  },
+  errorText: {
+    fontSize: 14,
+    color: colors.errorDark,
+    lineHeight: 20,
+  },
+  inputGroup: {
+    marginBottom: spacing[5],
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.foreground,
+    marginBottom: spacing[2],
+  },
+  input: {
+    backgroundColor: colors.muted,
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[5],
+    fontSize: 16,
+    color: colors.foreground,
+    borderWidth: 0,
+  },
+  passwordContainer: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordInput: {
+    flex: 1,
+    backgroundColor: colors.muted,
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[5],
+    paddingRight: spacing[12],
+    fontSize: 16,
+    color: colors.foreground,
+    borderWidth: 0,
+  },
+  eyeIcon: {
+    position: 'absolute',
+    right: spacing[4],
+    padding: spacing[2],
+  },
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginBottom: spacing[6],
+    marginTop: -spacing[2],
+  },
+  forgotPasswordText: {
+    fontSize: 15,
+    color: colors.foreground,
+    fontWeight: '500',
+  },
+  loginButton: {
+    backgroundColor: colors.navy,
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[6],
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    ...shadows.sm,
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
+  },
+  loginButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.white,
+  },
+  divider: {
+    marginVertical: spacing[8],
+    alignItems: 'center',
+  },
+  dividerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray[500],
+    letterSpacing: 0.5,
+  },
+  signupButtons: {
+    gap: spacing[3],
+  },
+  outlineButton: {
+    borderWidth: 2,
+    borderColor: colors.foreground,
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[5],
+    alignItems: 'center',
+    backgroundColor: colors.white,
+  },
+  outlineButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.foreground,
+  },
+});

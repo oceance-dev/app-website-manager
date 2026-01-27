@@ -12,6 +12,15 @@ export default class Candidat extends BaseModel {
   declare emailParent: string
 
   @column()
+  declare phoneParent: string | null
+  
+  @column()
+  declare firstnameParent: string | null
+
+  @column()
+  declare lastnameParent: string | null
+
+  @column()
   declare status: 'pending' | 'appointment_scheduled' | 'validated' | 'rejected'
 
   @column()

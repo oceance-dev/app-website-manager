@@ -43,7 +43,7 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
     lastname: '',
     firstname: '',
     dateOfbirth: '',
-    sexe: 0,
+    sexe: -1, // -1 signifie non sélectionné
     phone: '',
     email: '',
     emailParent: '',
@@ -70,6 +70,8 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
   const [occupiedRoleNames, setOccupiedRoleNames] = useState<string[]>([]);
   const [showSuccessCard, setShowSuccessCard] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [errorFields, setErrorFields] = useState<string[]>([]);
 
   // Charger les associations au montage du composant
   React.useEffect(() => {
@@ -89,6 +91,7 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
 
           setAssociations(associationsList);
           console.log('✅ Associations loaded:', associationsList.length);
+          console.log('📋 Premier élément:', associationsList[0]);
         }
       } catch (error) {
         console.error('Failed to load associations:', error);
@@ -185,49 +188,77 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
       setIsLoading(true);
 
       if (userType === 'candidat') {
-        // Créer l'objet User pour la connexion automatique
-        const newUser: User = {
-          id: Math.floor(Math.random() * 10000),
-          lastname: signData.lastname,
+        // Valider que tous les champs sont remplis
+        const missingFields = [];
+        if (!signData.firstname) missingFields.push('Prénom');
+        if (!signData.lastname) missingFields.push('Nom');
+        if (!signData.email) missingFields.push('Email');
+        if (!signData.emailParent) missingFields.push('Email parent');
+        if (!signData.password) missingFields.push('Mot de passe');
+        if (!signData.confirmPassword) missingFields.push('Confirmation mot de passe');
+        if (!signData.dateOfbirth) missingFields.push('Date de naissance');
+        if (!signData.postalCode) missingFields.push('Code postal');
+        // Le sexe peut être 0 (Masculin) ou 1 (Féminin), donc on vérifie juste qu'il est défini
+        if (signData.sexe !== 0 && signData.sexe !== 1) missingFields.push('Sexe');
+
+        if (missingFields.length > 0) {
+          throw new Error(`Champs manquants: ${missingFields.join(', ')}`);
+        }
+
+        // Vérifier que les mots de passe correspondent
+        if (signData.password !== signData.confirmPassword) {
+          throw new Error('Les mots de passe ne correspondent pas');
+        }
+
+        console.log('🚀 Starting candidat registration...');
+        console.log('📋 Sign data:', {
           firstname: signData.firstname,
+          lastname: signData.lastname,
           email: signData.email,
-          role: 'Candidat',  // Le candidat a le rôle 'Candidat' jusqu'à validation
-          statut: 'Actif',
-          phone: signData.phone || '',
+          emailParent: signData.emailParent,
           dateOfbirth: signData.dateOfbirth,
           sexe: signData.sexe,
-        };
+          postalCode: signData.postalCode,
+        });
 
         try {
-          // Appel API pour inscription cadet (optionnel - mode démo si échec)
-          const response = await CandidatsApi.registerCandidat({
-            lastname: signData.lastname,
-            firstname: signData.firstname,
-            email: signData.email,
-            emailParent: signData.emailParent,
-            password: signData.password,
-            phone: signData.phone,
-            cityCode: signData.postalCode,
-            dateOfbirth: signData.dateOfbirth,
-            sexe: signData.sexe,
+          // Convertir sexe number vers 'Homme' | 'Femme'
+          const sexeString = signData.sexe === 1 ? 'Femme' : 'Homme';
+          console.log('🔄 Converted sexe:', sexeString);
+
+          // Appel API pour inscription candidat
+          const response = await AuthApi.registerCandidat({
+            candidat: {
+              firstname: signData.firstname,
+              lastname: signData.lastname,
+              email: signData.email,
+              password: signData.password,
+              passwordConfirmation: signData.confirmPassword,
+              city_code: signData.postalCode,
+              dateOfBirth: signData.dateOfbirth,
+              sexe: sexeString,
+            },
+            parent: {
+              emailParent: signData.emailParent,
+            },
           });
-          console.log(response);
-          if (response.success) {
-            console.log('✅ Candidat registered via API');
+
+          if (response.success && response.data) {
+            console.log('✅ Candidat registered successfully');
+
+            // Afficher la card de confirmation
+            setSuccessMessage(
+              'Votre compte candidat a été créé avec succès ! 🎉\n\n' +
+              'Vous pouvez maintenant vous connecter et accéder à votre espace personnel.\n\n' +
+              'Un email de confirmation a été envoyé à votre adresse.'
+            );
+            setShowSuccessCard(true);
           }
         } catch (apiError) {
-          // L'API a échoué, mais on continue en mode démo
-          console.warn('⚠️ API registration failed, continuing in demo mode:', apiError);
+          // L'API a échoué
+          console.error('⚠️ API registration failed:', apiError);
+          throw apiError;
         }
-
-        // Connexion automatique (fonctionne avec ou sans API)
-        if (isWeb) {
-          alert('Inscription réussie ! Vous pouvez maintenant télécharger vos documents.');
-        } else {
-          Alert.alert('Succès', 'Inscription réussie ! Vous pouvez maintenant télécharger vos documents.');
-        }
-
-        onSign(newUser);
       } else if (userType === 'organization') {
         try {
           // Appel API pour inscription organisation
@@ -287,6 +318,30 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
 
         console.log('🚀 Starting member registration...');
         console.log('Association ID:', selectedAssociationId);
+        console.log('📋 FULL signData:', signData);
+        console.log('📋 signData.postalCode:', signData.postalCode);
+        console.log('📋 signData.firstname:', signData.firstname);
+        console.log('📋 signData.lastname:', signData.lastname);
+        console.log('📋 signData.phone:', signData.phone);
+        console.log('📋 signData.dateOfbirth:', signData.dateOfbirth);
+        console.log('📋 signData.sexe:', signData.sexe);
+
+        // Vérification que le city_code est présent
+        if (!signData.postalCode) {
+          throw new Error('Code postal manquant. Veuillez sélectionner une association.');
+        }
+
+        if (!signData.phone) {
+          throw new Error('Téléphone manquant.');
+        }
+
+        if (!signData.dateOfbirth) {
+          throw new Error('Date de naissance manquante.');
+        }
+
+        if (signData.sexe !== 0 && signData.sexe !== 1) {
+          throw new Error('Sexe manquant.');
+        }
 
         try {
           const payload = {
@@ -297,7 +352,7 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
               password: signData.password || '',
               passwordConfirmation: signData.confirmPassword || '',
               phone: signData.phone || '',
-              city_code: signData.postalCode || '',
+              city_code: signData.postalCode,
               dateOfBirth: signData.dateOfbirth || '',
               sexe: signData.sexe === 0 ? 'Homme' as const : 'Femme' as const,
               associationId: selectedAssociationId!,
@@ -327,32 +382,83 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
           throw apiError;
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error during registration:', error);
 
-      let errorMessage = 'Une erreur est survenue lors de l\'inscription';
+      let displayErrorMessage = 'Une erreur est survenue lors de l\'inscription';
+      let fieldsInError: string[] = [];
 
       if (error instanceof ApiError) {
-        errorMessage = error.message;
+        displayErrorMessage = error.message;
+
+        // Extraire les champs en erreur depuis l'API (dans error.data)
+        if (error.data && error.data.errors && Array.isArray(error.data.errors)) {
+          fieldsInError = error.data.errors.map((e: any) => e.field).filter(Boolean);
+        }
       } else if (error instanceof Error) {
-        errorMessage = error.message;
+        displayErrorMessage = error.message;
       }
 
-      if (isWeb) {
-        alert(errorMessage);
-      } else {
-        Alert.alert('Erreur', errorMessage);
+      // Vérifier si c'est une erreur de validation du backend
+      if (error.response?.data?.code === 'E_VALIDATION_ERROR') {
+        const validationErrors = error.response.data.messages || [];
+        console.log('📋 Validation errors:', validationErrors);
+
+        // Construire un message d'erreur détaillé
+        const errorMessages = validationErrors.map((err: any) => {
+          const field = err.field?.split('.').pop(); // Extraire le nom du champ (ex: 'candidat.email' -> 'email')
+
+          if (err.message?.includes('already been taken')) {
+            if (field === 'email') {
+              return '❌ Cet email est déjà utilisé. Veuillez vous connecter ou utiliser un autre email.';
+            }
+            if (field === 'emailParent') {
+              return '❌ Cet email parent est déjà utilisé.';
+            }
+          }
+
+          if (err.rule === 'database.unique') {
+            return `❌ Le champ "${field}" existe déjà.`;
+          }
+
+          if (err.rule === 'regex') {
+            if (field === 'password') {
+              return '❌ Le mot de passe doit contenir au moins 12 caractères, une majuscule, une minuscule, un chiffre et un caractère spécial.';
+            }
+            if (field === 'city_code') {
+              return '❌ Le code postal doit contenir 5 chiffres.';
+            }
+          }
+
+          if (err.rule === 'minLength') {
+            return `❌ Le champ "${field}" est trop court.`;
+          }
+
+          return `❌ ${err.message}`;
+        });
+
+        displayErrorMessage = errorMessages.join('\n\n');
       }
+
+      setErrorMessage(displayErrorMessage);
+      setErrorFields(fieldsInError);
+
+      // Faire défiler vers le haut pour voir le message d'erreur
+      window?.scrollTo?.({ top: 0, behavior: 'smooth' });
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleNext = () => {
+    setErrorMessage('');
+    setErrorFields([]);
     setCurrentStep(currentStep + 1);
   };
 
   const handlePrevious = () => {
+    setErrorMessage('');
+    setErrorFields([]);
     if (currentStep > 0) {
       if (currentStep === 1 && userType) {
         // Retour au choix du type
@@ -369,11 +475,36 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
     setCurrentStep(1);
   };
 
+  // Helper pour vérifier si un champ a une erreur
+  const hasFieldError = (fieldName: string): boolean => {
+    return errorFields.includes(fieldName);
+  };
+
+  // Helper pour retirer un champ de la liste des erreurs
+  const removeFieldError = (fieldName: string) => {
+    if (errorFields.includes(fieldName)) {
+      const updatedFields = errorFields.filter(f => f !== fieldName);
+      setErrorFields(updatedFields);
+
+      // Effacer le message d'erreur seulement si tous les champs ont été remplis
+      if (updatedFields.length === 0) {
+        setErrorMessage('');
+      }
+    }
+  };
+
+  // Helper pour vérifier si un champ est rempli et retirer l'erreur
+  const clearFieldErrorIfFilled = (fieldName: string, value: string) => {
+    if (value && value.trim()) {
+      removeFieldError(fieldName);
+    }
+  };
+
   const paddingTop = isWeb ? 0 : Platform.OS === 'ios' ? 100 : (StatusBar.currentHeight || 0) + 90;
   const headerPaddingTop = isWeb ? 10 : Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 0) + 10;
 
   // Calculer le nombre total d'étapes
-  const totalSteps = userType === 'organization' ? 3 : (userType === 'cadet' ? 2 : (userType === 'admin_member' ? 4 : 0));
+  const totalSteps = userType === 'organization' ? 3 : (userType === 'candidat' ? 2 : (userType === 'admin_member' ? 4 : 0));
 
   return (
     <KeyboardAvoidingView
@@ -389,7 +520,7 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
           <View>
             <Text style={[styles.appName, { fontSize: isWeb ? 28 : 20 }]}>CadetApp</Text>
             <Text style={[styles.appSubtitle, { fontSize: isWeb ? 14 : 12 }]}>
-              {userType === 'cadet' ? 'Devenir cadet' : userType === 'organization' ? 'Créer votre association' : userType === 'admin_member' ? 'Inscription membre' : 'Inscription'}
+              {userType === 'candidat' ? 'Devenir candidat' : userType === 'organization' ? 'Créer votre association' : userType === 'admin_member' ? 'Inscription membre' : 'Inscription'}
             </Text>
           </View>
         </View>
@@ -429,6 +560,37 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
               <>
                 <Text style={styles.title}>Inscription</Text>
 
+                {/* Message d'erreur */}
+                {errorMessage && (
+                  <View style={{
+                    padding: 16,
+                    marginBottom: 16,
+                    marginTop: 16,
+                    backgroundColor: '#fef2f2',
+                    borderRadius: 12,
+                    borderLeftWidth: 4,
+                    borderLeftColor: '#dc2626',
+                    shadowColor: '#dc2626',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.1,
+                    shadowRadius: 4,
+                    elevation: 2,
+                  }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+                      <Text style={{ fontSize: 18 }}>⚠️</Text>
+                      <Text style={{
+                        flex: 1,
+                        fontSize: 14,
+                        color: '#dc2626',
+                        lineHeight: 22,
+                        fontWeight: '500',
+                      }}>
+                        {errorMessage}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
                 {/* Étape 0 : Choix du type */}
                 {currentStep === 0 && (
                   <View style={styles.choiceContainer}>
@@ -436,15 +598,15 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
 
                     <TouchableOpacity
                       style={styles.choiceCard}
-                      onPress={() => handleSelectUserType('cadet')}
+                      onPress={() => handleSelectUserType('candidat')}
                       activeOpacity={0.7}
                     >
                       <View style={[styles.choiceIcon, { backgroundColor: '#dbeafe' }]}>
                         <UserIcon color="#2563eb" size={26} />
                       </View>
-                      <Text style={styles.choiceTitle}>Un Cadet</Text>
+                      <Text style={styles.choiceTitle}>Un Candidat</Text>
                       <Text style={styles.choiceDescription}>
-                        Rejoindre une association en tant que cadet
+                        Créer un compte candidat pour rejoindre une association
                       </Text>
                     </TouchableOpacity>
 
@@ -470,9 +632,9 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
                       <View style={[styles.choiceIcon, { backgroundColor: '#fef3c7' }]}>
                         <Building2 color="#f59e0b" size={26} />
                       </View>
-                      <Text style={styles.choiceTitle}>Membre Administratif</Text>
+                      <Text style={styles.choiceTitle}>Encadrement</Text>
                       <Text style={styles.choiceDescription}>
-                        Membre de l'administration de l'association
+                        Membre de l'encadrement de l'association
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -502,10 +664,10 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
                   </View>
                 )}
 
-                {/* ===== INSCRIPTION CADET ===== */}
-                {userType === 'cadet' && (
+                {/* ===== INSCRIPTION CANDIDAT ===== */}
+                {userType === 'candidat' && (
                   <>
-                    {/* Étape 1 Cadet : Informations personnelles */}
+                    {/* Étape 1 Candidat : Informations personnelles */}
                     {currentStep === 1 && (
                       <View style={styles.stepContainer}>
                         <Text style={styles.stepTitle}>Vos informations</Text>
@@ -541,6 +703,15 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
                             />
                           </View>
                         </View>
+
+                        <Input
+                          label="Téléphone *"
+                          placeholder="Ex: 0612345678"
+                          value={signData.phone}
+                          onChangeText={(text) => setSignData({ ...signData, phone: text })}
+                          keyboardType="phone-pad"
+                          maxLength={10}
+                        />
 
                         <Input
                           label="Code postal *"
@@ -637,6 +808,15 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
                           placeholder="••••••••"
                           value={signData.password}
                           onChangeText={(text) => setSignData({ ...signData, password: text })}
+                          secureTextEntry
+                          leftIcon={<Lock color="#94a3b8" size={20} />}
+                        />
+
+                        <Input
+                          label="Confirmer le mot de passe *"
+                          placeholder="••••••••"
+                          value={signData.confirmPassword}
+                          onChangeText={(text) => setSignData({ ...signData, confirmPassword: text })}
                           secureTextEntry
                           leftIcon={<Lock color="#94a3b8" size={20} />}
                         />
@@ -775,8 +955,16 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
                               label="Prénom *"
                               placeholder="Votre prénom"
                               value={signData.firstname}
-                              onChangeText={(text) => setSignData({ ...signData, firstname: text })}
+                              onChangeText={(text) => {
+                                setSignData({ ...signData, firstname: text });
+                                clearFieldErrorIfFilled('firstname', text);
+                                clearFieldErrorIfFilled('responsable.firstName', text);
+                              }}
                               leftIcon={<UserIcon color="#94a3b8" size={20} />}
+                              wrapperStyle={hasFieldError('firstname') || hasFieldError('responsable.firstName') ? {
+                                borderColor: '#dc2626',
+                                borderWidth: 2,
+                              } : {}}
                             />
                           </View>
                           <View style={styles.halfWidth}>
@@ -784,7 +972,15 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
                               label="Nom *"
                               placeholder="Votre nom"
                               value={signData.lastname}
-                              onChangeText={(text) => setSignData({ ...signData, lastname: text })}
+                              onChangeText={(text) => {
+                                setSignData({ ...signData, lastname: text });
+                                clearFieldErrorIfFilled('lastname', text);
+                                clearFieldErrorIfFilled('responsable.lastName', text);
+                              }}
+                              wrapperStyle={hasFieldError('lastname') || hasFieldError('responsable.lastName') ? {
+                                borderColor: '#dc2626',
+                                borderWidth: 2,
+                              } : {}}
                             />
                           </View>
                         </View>
@@ -793,19 +989,35 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
                           label="Email *"
                           placeholder="votre@email.com"
                           value={signData.email}
-                          onChangeText={(text) => setSignData({ ...signData, email: text })}
+                          onChangeText={(text) => {
+                            setSignData({ ...signData, email: text });
+                            clearFieldErrorIfFilled('email', text);
+                            clearFieldErrorIfFilled('responsable.email', text);
+                          }}
                           keyboardType="email-address"
                           autoCapitalize="none"
                           leftIcon={<Mail color="#94a3b8" size={20} />}
+                          wrapperStyle={hasFieldError('email') || hasFieldError('responsable.email') ? {
+                            borderColor: '#dc2626',
+                            borderWidth: 2,
+                          } : {}}
                         />
 
                         <Input
                           label="Mot de passe *"
                           placeholder="••••••••"
                           value={signData.password}
-                          onChangeText={(text) => setSignData({ ...signData, password: text })}
+                          onChangeText={(text) => {
+                            setSignData({ ...signData, password: text });
+                            clearFieldErrorIfFilled('password', text);
+                            clearFieldErrorIfFilled('responsable.password', text);
+                          }}
                           secureTextEntry
                           leftIcon={<Lock color="#94a3b8" size={20} />}
+                          wrapperStyle={hasFieldError('password') || hasFieldError('responsable.password') ? {
+                            borderColor: '#dc2626',
+                            borderWidth: 2,
+                          } : {}}
                         />
                         <Text style={styles.hint}>Minimum 12 caractères (majuscule, minuscule, chiffre, caractère spécial)</Text>
 
@@ -813,9 +1025,18 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
                           label="Confirmer le mot de passe *"
                           placeholder="••••••••"
                           value={signData.confirmPassword}
-                          onChangeText={(text) => setSignData({ ...signData, confirmPassword: text })}
+                          onChangeText={(text) => {
+                            setSignData({ ...signData, confirmPassword: text });
+                            clearFieldErrorIfFilled('confirmPassword', text);
+                            clearFieldErrorIfFilled('passwordConfirmation', text);
+                            clearFieldErrorIfFilled('responsable.passwordConfirmation', text);
+                          }}
                           secureTextEntry
                           leftIcon={<Lock color="#94a3b8" size={20} />}
+                          wrapperStyle={hasFieldError('confirmPassword') || hasFieldError('passwordConfirmation') || hasFieldError('responsable.passwordConfirmation') ? {
+                            borderColor: '#dc2626',
+                            borderWidth: 2,
+                          } : {}}
                         />
 
                         <View style={styles.buttonRow}>
@@ -1010,9 +1231,12 @@ export default function SignScreen({ onSign, onNavigateToLogin }: SignScreenProp
                                   selectedAssociationId === assoc.id && styles.roleCardActive
                                 ]}
                                 onPress={() => {
+                                  console.log('✅ Association sélectionnée:', assoc.name, 'Code postal:', assoc.postalCode);
                                   setSelectedAssociationId(assoc.id);
                                   // Définir automatiquement le code postal en fonction de l'association
-                                  setSignData({ ...signData, postalCode: assoc.postalCode });
+                                  const updatedData = { ...signData, postalCode: assoc.postalCode };
+                                  console.log('📋 Mise à jour signData avec postalCode:', assoc.postalCode);
+                                  setSignData(updatedData);
                                   // Vérifier le département
                                   if (isValidPostalCode(assoc.postalCode)) {
                                     const department = getDepartmentFromPostalCode(assoc.postalCode);

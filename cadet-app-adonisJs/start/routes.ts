@@ -16,6 +16,8 @@ import UsersController from '#controllers/users_controller'
 import RolesController from '#controllers/roles_controller'
 import DocumentsController from '#controllers/documents_controller'
 import FoldersController from '#controllers/folders_controller'
+import DocumentRequirementsController from '#controllers/document_requirements_controller'
+import CandidatsController from '#controllers/candidats_controller'
 
 
 /**
@@ -49,6 +51,10 @@ router.group(() => {
     // Inscription d'un membre d'une association
     router 
       .post('/registerMemberAssociation', [AuthController, 'registerMemberAssociation'])
+      .use(authTrottle)
+
+    router
+      .post('/registerCandidat', [AuthController, 'registerCandidatAssociation'])
       .use(authTrottle)
 
     // Connexion (public)
@@ -142,6 +148,7 @@ router.group(() => {
 
       // Gestion des candidatures
       router.group(() => {
+        router.get('/', [AssociationsController, 'candidats'])
 
       }).prefix('/candidatures')
 
@@ -237,18 +244,80 @@ router.group(() => {
       router.get('/view/:id', [DocumentsController, 'show'])
       router.post('/upload-document', [DocumentsController, 'store'])
       router.get('/download/:id', [DocumentsController, 'downloadDocument'])
+      router.put('/update-document/:id', [DocumentsController, 'update'])
+      router.delete('/delete-document/:id', [DocumentsController, 'destroy'])
     }).prefix('/users')
 
     router.group(() => {
-
-    }).prefix('/cadet')
+      router.get('/:id/documents', [DocumentsController, 'candidatDocuments'])
+      router.post(':id/upload-document', [DocumentsController, 'uploadCandidatDocument'])
+    }).prefix('/candidat')
 
     router.group(() => {
+      router.get('/stats-documents', [DocumentsController, 'stats'])
+    }).prefix('/staffApp')
 
-    }).prefix('/candidat')
+    router.get('/types', [DocumentsController, 'types'])
+    router.get('/types/required', [DocumentsController, 'requiredTypes'])
+
+    // Gestion des types personnalisés (association.manage requis)
+    router.get('/types/custom', [DocumentsController, 'customTypes'])
+    router.post('/types/create', [DocumentsController, 'createType'])
+    router.put('/types/:id', [DocumentsController, 'updateType'])
+    router.delete('/types/:id', [DocumentsController, 'deleteType'])
 
   }).prefix('/documents')
     .use(middleware.auth())
+
+
+
+  /**
+   * ========================================
+   * ROUTES EXIGENCES DOCUMENTAIRES (PUBLIQUE)
+   * ========================================
+   */
+  router.get('/api/v1/associations/:slug/registration-requirements', [DocumentRequirementsController, 'forRegistration'])
+
+
+  /**
+   * ========================================
+   * ROUTES EXIGENCES DOCUMENTAIRES (ADMIN)
+   * ========================================
+   */
+  router.group(() => {
+    // Ma complétion (accessible à tous les authentifiés)
+    router.get('/my-completion', [DocumentRequirementsController, 'myCompletion'])
+
+    // Types disponibles
+    router.get('/available-types', [DocumentRequirementsController, 'availableTypes'])
+
+    // Statistiques
+    //router.get('/stats', [DocumentRequirementsController, 'stats'])
+
+    // Actions en masse
+    router.post('/initialize', [DocumentRequirementsController, 'initialize'])
+    router.post('/reset', [DocumentRequirementsController, 'reset'])
+    router.post('/reorder', [DocumentRequirementsController, 'reorder'])
+    router.post('/bulk-update', [DocumentRequirementsController, 'bulkUpdate'])
+
+    // Vérification complétion
+    router.get('/check/:userId', [DocumentRequirementsController, 'checkCompletion'])
+    router.get('/can-approve/:userId', [DocumentRequirementsController, 'canApprove'])
+
+    // CRUD
+    router.get('/', [DocumentRequirementsController, 'index'])
+    router.post('/create-document-required', [DocumentRequirementsController, 'createExigence'])
+    router.get('/:id', [DocumentRequirementsController, 'show'])
+    router.put('/update-document-required/:id', [DocumentRequirementsController, 'update'])
+    router.delete('/delete-document-required/:id', [DocumentRequirementsController, 'destroy'])
+
+    // Actions sur une exigence
+    router.post('/:id/toggle', [DocumentRequirementsController, 'toggle'])
+
+  })
+  .prefix('/document-requirements')
+  .use(middleware.auth())
+
 
   /**
    * ========================================
@@ -262,12 +331,18 @@ router.group(() => {
     // Déplacer un document
     router.post('/move-document', [FoldersController, 'moveDocument'])
 
+    // Synchroniser les dossiers
+    router.post('/sync', [FoldersController, 'sync'])
+
     // CRUD dossiers
     router.get('/getAllFolder', [FoldersController, 'index'])
     router.post('/create-folder', [FoldersController, 'store'])
     router.get('/:id', [FoldersController, 'show'])
     router.put('/update/:id', [FoldersController, 'update'])
     router.delete('/delete/:id', [FoldersController, 'destroy'])
+
+    // Déplacer un dossier
+    router.post('/:id/move', [FoldersController, 'move'])
 
     // Gestion des membres
     router.get('/:id/members', [FoldersController, 'members'])
@@ -276,6 +351,33 @@ router.group(() => {
     router.delete('/:id/members/:userId', [FoldersController, 'removeMember'])
   }).prefix('/folders')
     .use(middleware.auth())
+
+  /**
+   * ========================================
+   * ROUTES CANDIDAT
+   * ========================================
+   */
+
+  router.group(() => {
+    // Exigences pour mon inscription
+    router.get('/doc-requirements', [CandidatsController, 'requirementsDoc'])
+
+    router.get('/completion', [CandidatsController, 'completion'])
+
+    router.get('/can-submit', [CandidatsController, 'canSubmit'])
+
+    // Route du candidat
+    router.get('/get-my-documents', [CandidatsController, 'index'])
+    router.post('/upload-my-document', [CandidatsController, 'uploadDocumentCandidat'])
+    router.get('/view-my-document/:id', [CandidatsController, 'show'])
+    router.delete('/delete-my-document/:id', [CandidatsController, 'destroy'])
+    router.get('/download-my-document/:id', [CandidatsController, 'download'])
+    router.post('/replace-my-document/:id', [CandidatsController, 'replace'])
+
+  })
+    .prefix('/candidats')
+    .use(middleware.auth())
+
 })
 .prefix('/api/v1')
 .use(throttle)

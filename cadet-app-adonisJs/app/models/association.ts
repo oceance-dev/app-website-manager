@@ -91,6 +91,13 @@ export default class Association extends BaseModel {
     return this.subscriptionEndsAt > DateTime.now()
   }
 
+
+  static async getAssociationByCityCode(cityCode: string) {
+    return this.query()
+      .where('postal_code', cityCode)
+  }
+  
+
   /**
    * Sérialisation
    */

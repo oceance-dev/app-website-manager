@@ -28,6 +28,7 @@ export interface FolderWithMembers extends Folder {
 
 export interface CreateFolderData {
   name: string;
+  slug?: string;
   parentId?: number | null;
   visibility?: 'private' | 'members' | 'staff' | 'public';
   description?: string;
@@ -55,6 +56,10 @@ export interface UpdateFolderMemberData {
 export interface MoveDocumentData {
   documentId: number;
   targetFolderId: number | null;
+}
+
+export interface MoveFolderData {
+  targetParentId: number | null;
 }
 
 export const FoldersApi = {
@@ -106,9 +111,14 @@ export const FoldersApi = {
 
   /**
    * Supprimer un dossier
+   * @param id - ID du dossier
+   * @param force - Forcer la suppression même si le dossier contient des documents/sous-dossiers
    */
-  async delete(id: number): Promise<ApiResponse<void>> {
-    await api.delete(UrlApi.foldersApi.delete(id));
+  async delete(id: number, force: boolean = false): Promise<ApiResponse<void>> {
+    const url = force
+      ? `${UrlApi.foldersApi.delete(id)}?force=true`
+      : UrlApi.foldersApi.delete(id);
+    await api.delete(url);
     return { success: true, data: undefined };
   },
 
@@ -162,5 +172,27 @@ export const FoldersApi = {
   async removeMember(folderId: number, userId: number): Promise<ApiResponse<void>> {
     await api.delete(UrlApi.foldersApi.deleteFolderMember(folderId, userId));
     return { success: true, data: undefined };
+  },
+
+  /**
+   * Synchroniser les dossiers
+   * Synchronise la structure des dossiers avec le backend
+   */
+  async syncFolders(): Promise<ApiResponse<{ folders: Folder[] }>> {
+    const data = await api.post<{ folders: Folder[] }>(UrlApi.foldersApi.syncFolders);
+    return { success: true, data };
+  },
+
+  /**
+   * Déplacer un dossier vers un autre parent
+   * @param folderId - ID du dossier à déplacer
+   * @param targetParentId - ID du nouveau parent (null pour la racine)
+   */
+  async moveFolder(folderId: number, targetParentId: number | null): Promise<ApiResponse<{ folder: Folder }>> {
+    const data = await api.put<{ folder: Folder }>(
+      UrlApi.foldersApi.moveFolder(folderId),
+      { targetParentId }
+    );
+    return { success: true, data };
   },
 };

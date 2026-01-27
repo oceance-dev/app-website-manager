@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 import { DateTime } from 'luxon'
 import User from '#models/user'
 import Role from '#models/role'
+import Folder from '#models/folder'
 import {
   createUserValidator,
   updateUserValidator,
@@ -149,6 +150,9 @@ export default class UsersController {
       failedLoginAttempts: 0,
       mustChangePassword: true,
     })
+
+    // Créer le dossier privé de l'utilisateur
+    await Folder.createPrivateFolder(user)
 
     await user.load('role')
 
@@ -762,6 +766,9 @@ export default class UsersController {
     user.isActive = true
     await user.save()
     await user.load('role')
+
+    // Créer le dossier privé de l'utilisateur s'il n'existe pas déjà
+    await Folder.createPrivateFolder(user)
 
     return response.ok({
       success: true,

@@ -33,6 +33,8 @@ interface UploadOptions {
   associationId: number
   userId: number
   candidatId?: number
+  folderId?: number
+  documentRequirementId?: number
   category: DocumentCategory
   visibility?: DocumentVisibility
   name?: string
@@ -40,6 +42,8 @@ interface UploadOptions {
   expirationDate?: DateTime
   documentDate?: DateTime
   metadata?: Record<string, unknown>
+  pathFile?: string
+  isTemplate?: boolean // Skip category-specific validation for template documents
 }
 
 /**
@@ -155,12 +159,25 @@ export default class DocumentService {
       const fileId = randomUUID()
       const extension = extname(file.clientName).toLowerCase().slice(1)
       const fileName = `${fileId}.${extension}`
-      const filePath = this.generateFilePath(options.associationId, options.category, fileName)
+
+      // Générer le chemin du fichier si non fourni
+      let filePath = options.pathFile
+      if (!filePath) {
+        // Construire le chemin par défaut: associations/{associationId}/{category}/{fileName}
+        filePath = [
+          'associations',
+          String(options.associationId),
+          options.category,
+          fileName
+        ].join('/')
+      }
+
+      console.log('📂 Generated file path:', filePath)
 
       // Upload selon le driver
       let fileUrl: string | null = null
       if (this.config.driver === 's3') {
-        fileUrl = await this.uploadToS3(file, filePath)
+        //fileUrl = await this.uploadToS3(file, filePath)
       } else {
         await this.uploadToLocal(file, filePath)
       }
@@ -169,13 +186,15 @@ export default class DocumentService {
       const mimeType = this.getMimeTypeFromExtension(extension) || file.type || 'application/octet-stream'
 
       // Créer l'entrée en BDD
-      const document = await Document.create({
+      const documentData = {
         associationId: options.associationId,
         userId: options.userId,
         candidatId: options.candidatId || null,
+        folderId: options.folderId || null,
+        documentRequirementId: options.documentRequirementId || null,
         name: options.name || file.clientName,
         originalName: file.clientName,
-        filePath,
+        filePath: filePath,
         fileUrl,
         mimeType,
         fileSize: file.size,
@@ -188,7 +207,18 @@ export default class DocumentService {
         expirationDate: options.expirationDate || null,
         documentDate: options.documentDate || null,
         version: 1,
+      }
+
+      console.log('💾 Creating document in DB with data:', {
+        ...documentData,
+        folderId: documentData.folderId,
+        documentRequirementId: documentData.documentRequirementId,
+        name: documentData.name,
       })
+
+      const document = await Document.create(documentData)
+
+      console.log('✅ Document created with ID:', document.id, 'folderId:', document.folderId)
 
       return { success: true, document }
     } catch (error) {
@@ -227,14 +257,24 @@ export default class DocumentService {
   private async uploadToLocal(file: MultipartFile, filePath: string): Promise<void> {
     const fullPath = join(app.makePath(this.config.localPath), filePath)
     const directory = join(fullPath, '..')
+    const fileName = filePath.split('/').pop()
+
+    console.log('📤 uploadToLocal - Input filePath:', filePath)
+    console.log('📁 uploadToLocal - Full path:', fullPath)
+    console.log('📂 uploadToLocal - Directory:', directory)
+    console.log('📄 uploadToLocal - File name:', fileName)
 
     // Créer le répertoire si nécessaire
     if (!existsSync(directory)) {
+      console.log('🆕 Creating directory:', directory)
       mkdirSync(directory, { recursive: true })
+    } else {
+      console.log('✅ Directory already exists:', directory)
     }
 
     // Déplacer le fichier
-    await file.move(directory, { name: filePath.split('/').pop() })
+    await file.move(directory, { name: fileName })
+    console.log('✅ File moved successfully to:', join(directory, fileName!))
   }
 
   /**
@@ -355,33 +395,36 @@ export default class DocumentService {
       return file.errors[0]?.message || 'Fichier invalide'
     }
 
-    // Récupérer les types de documents pour cette catégorie
-    const documentTypes = await DocumentType.query()
-      .where((query) => {
-        query.whereNull('associationId').orWhere('associationId', options.associationId)
-      })
-      .where('category', options.category)
-      .where('isActive', true)
-      .first()
-
-    if (documentTypes) {
-      // Vérifier l'extension
-      if (documentTypes.allowedExtensions && documentTypes.allowedExtensions.length > 0) {
-        const extension = extname(file.clientName).toLowerCase().slice(1)
-        console.log('🔍 Debug extension:', {
-          clientName: file.clientName,
-          extname: extname(file.clientName),
-          extension: extension,
-          allowedExtensions: documentTypes.allowedExtensions
+    // Skip category-specific validation for template documents
+    if (!options.isTemplate) {
+      // Récupérer les types de documents pour cette catégorie
+      const documentTypes = await DocumentType.query()
+        .where((query) => {
+          query.whereNull('associationId').orWhere('associationId', options.associationId)
         })
-        if (!documentTypes.allowedExtensions.includes(extension)) {
-          return `Extension non autorisée. Extensions acceptées: ${documentTypes.allowedExtensionsFormatted}`
-        }
-      }
+        .where('category', options.category)
+        .where('isActive', true)
+        .first()
 
-      // Vérifier la taille
-      if (documentTypes.maxFileSize && file.size > documentTypes.maxFileSize) {
-        return `Fichier trop volumineux. Taille maximum: ${documentTypes.maxFileSizeFormatted}`
+      if (documentTypes) {
+        // Vérifier l'extension
+        if (documentTypes.allowedExtensions && documentTypes.allowedExtensions.length > 0) {
+          const extension = extname(file.clientName).toLowerCase().slice(1)
+          console.log('🔍 Debug extension:', {
+            clientName: file.clientName,
+            extname: extname(file.clientName),
+            extension: extension,
+            allowedExtensions: documentTypes.allowedExtensions
+          })
+          if (!documentTypes.allowedExtensions.includes(extension)) {
+            return `Extension non autorisée. Extensions acceptées: ${documentTypes.allowedExtensionsFormatted}`
+          }
+        }
+
+        // Vérifier la taille
+        if (documentTypes.maxFileSize && file.size > documentTypes.maxFileSize) {
+          return `Fichier trop volumineux. Taille maximum: ${documentTypes.maxFileSizeFormatted}`
+        }
       }
     }
 

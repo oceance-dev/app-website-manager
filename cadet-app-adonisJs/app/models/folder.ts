@@ -405,6 +405,18 @@ export default class Folder extends BaseModel {
         allowDownload: true,
         sortOrder: 3,
       },
+      {
+        name: 'Candidatures',
+        slug: 'candidatures',
+        description: 'Documents liés aux candidatures',
+        type: 'system' as FolderType,
+        visibility: 'staff' as FolderVisibility,
+        icon: 'file-document',
+        color: '#EF4444',
+        allowUpload: false,
+        allowDownload: true,
+        sortOrder: 4,
+      }
     ]
 
     for (const folder of systemFolders) {

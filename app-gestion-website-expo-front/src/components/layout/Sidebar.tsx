@@ -5,12 +5,15 @@ import { MenuItem } from '../../types';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types';
-import { isWeb, isLargeScreen, isMobile, getFontSize, getSpacing, getResponsivePadding, MIN_TOUCH_TARGET } from '../../utils/responsive';
+import { isWeb, isLargeScreen, isMobile, getResponsivePadding, getSpacing, MIN_TOUCH_TARGET } from '../../utils/responsive';
+import { colors, textStyles, spacing, borderRadius } from '../../theme';
+import { Logo } from '../cadep';
 
 interface SidebarProps {
   activeScreen: string;
   menuItems: MenuItem[];
   onNavigate?: () => void;
+  onLogout?: () => void;
 }
 
 const iconMap = {
@@ -24,7 +27,7 @@ const iconMap = {
   'settings': Settings,
 };
 
-export default function Sidebar({ activeScreen, menuItems, onNavigate }: SidebarProps) {
+export default function Sidebar({ activeScreen, menuItems, onNavigate, onLogout }: SidebarProps) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const isDesktop = isWeb && isLargeScreen();
 
@@ -39,18 +42,15 @@ export default function Sidebar({ activeScreen, menuItems, onNavigate }: Sidebar
 
   return (
     <View style={[styles.container, isDesktop && styles.containerDesktop, { paddingTop }]}>
-      {/* Logo */}
+      {/* Logo Header */}
       <View style={styles.logoContainer}>
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>C</Text>
-        </View>
-        <View>
-          <Text style={styles.appName}>CadetApp</Text>
-          <Text style={styles.appSubtitle}>Gestion Pro</Text>
-        </View>
+        <Logo size="medium" showText={true} variant="dark" />
       </View>
 
-      {/* Menu */}
+      {/* Separator */}
+      <View style={styles.separator} />
+
+      {/* Menu Navigation */}
       <View style={styles.menuContainer}>
         <Text style={styles.menuTitle}>NAVIGATION</Text>
         {menuItems.map((item) => {
@@ -67,19 +67,29 @@ export default function Sidebar({ activeScreen, menuItems, onNavigate }: Sidebar
               onPress={() => handleNavigate(item.screen)}
               activeOpacity={0.7}
             >
-              <View style={[styles.iconContainer, isActive && styles.iconContainerActive]}>
-                <Icon
-                  color={isActive ? '#2563eb' : '#64748b'}
-                  size={20}
-                  strokeWidth={2}
-                />
-              </View>
+              <Icon
+                color={isActive ? colors.gold : colors.white + 'CC'}
+                size={20}
+                strokeWidth={2}
+              />
               <Text style={[styles.menuText, isActive && styles.menuTextActive]}>
                 {item.label}
               </Text>
+              {isActive && <View style={styles.activeIndicator} />}
             </TouchableOpacity>
           );
         })}
+      </View>
+
+      {/* Spacer */}
+      <View style={styles.spacer} />
+
+      {/* Footer */}
+      <View style={styles.footer}>
+        <View style={styles.separator} />
+        <View style={styles.copyrightSection}>
+          <Text style={styles.copyrightText}>2026 - CadetApp</Text>
+        </View>
       </View>
     </View>
   );
@@ -88,91 +98,85 @@ export default function Sidebar({ activeScreen, menuItems, onNavigate }: Sidebar
 const styles = StyleSheet.create({
   container: {
     width: isMobile ? '100%' : 280,
-    backgroundColor: '#fff',
+    backgroundColor: colors.navy,
     height: '100%',
   },
   containerDesktop: {
-    borderTopRightRadius: 20,
+    borderTopRightRadius: borderRadius.xl,
   },
   logoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: getResponsivePadding(),
     paddingBottom: getSpacing(20),
-    gap: 12,
+    gap: spacing[3],
   },
-  logo: {
-    width: isMobile ? 40 : 48,
-    height: isMobile ? 40 : 48,
-    backgroundColor: '#2563eb',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  logoText: {
-    fontSize: getFontSize(isMobile ? 20 : 24),
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  appName: {
-    fontSize: getFontSize(isMobile ? 18 : 20),
-    fontWeight: 'bold',
-    color: '#1e293b',
-  },
-  appSubtitle: {
-    fontSize: getFontSize(13),
-    color: '#64748b',
-    marginTop: 2,
+  separator: {
+    height: 1,
+    backgroundColor: colors.white + '20',
+    marginHorizontal: getResponsivePadding(),
+    marginBottom: spacing[4],
   },
   menuContainer: {
-    flex: 1,
     paddingHorizontal: getResponsivePadding(),
-    paddingTop: 8,
+    paddingTop: spacing[2],
   },
   menuTitle: {
-    fontSize: getFontSize(11),
+    ...textStyles.caption,
     fontWeight: '600',
-    color: '#94a3b8',
+    color: colors.white + 'B3',
     letterSpacing: 0.5,
-    marginBottom: 12,
-    marginLeft: 12,
+    marginBottom: spacing[3],
+    marginLeft: spacing[3],
+    textTransform: 'uppercase',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: getSpacing(12),
-    borderRadius: 12,
-    marginBottom: 4,
-    gap: 12,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing[1],
+    gap: spacing[3],
     backgroundColor: 'transparent',
     minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
+    position: 'relative',
   },
   menuItemActive: {
-    backgroundColor: '#eff6ff',
-  },
-  iconContainer: {
-    width: isMobile ? MIN_TOUCH_TARGET - 8 : 36,
-    height: isMobile ? MIN_TOUCH_TARGET - 8 : 36,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  iconContainerActive: {
-    backgroundColor: '#dbeafe',
+    backgroundColor: colors.white + '15',
   },
   menuText: {
-    fontSize: getFontSize(15),
+    ...textStyles.body,
     fontWeight: '500',
-    color: '#475569',
+    color: colors.white + 'CC',
+    flex: 1,
   },
   menuTextActive: {
-    color: '#2563eb',
+    color: colors.gold,
     fontWeight: '600',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    left: 0,
+    top: '20%',
+    bottom: '20%',
+    width: 3,
+    backgroundColor: colors.gold,
+    borderRadius: borderRadius.sm,
+  },
+  spacer: {
+    flex: 1,
+  },
+  footer: {
+    paddingBottom: getResponsivePadding(),
+  },
+  copyrightSection: {
+    paddingHorizontal: getResponsivePadding(),
+    paddingTop: spacing[3],
+    alignItems: 'center',
+  },
+  copyrightText: {
+    ...textStyles.caption,
+    color: colors.white + '80',
+    textAlign: 'center',
   },
 });

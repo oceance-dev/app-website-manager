@@ -53,15 +53,35 @@ export default function AddDocumentModal({
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(currentFolderId);
   const [visibility, setVisibility] = useState<'association' | 'personal'>('association');
 
-  // Mettre à jour le dossier sélectionné quand le currentFolderId change
-  useEffect(() => {
-    setSelectedFolderId(currentFolderId);
-  }, [currentFolderId]);
-
   // Filtrer les dossiers où l'utilisateur peut ajouter des documents
   const accessibleFolders = folders.filter((folder) =>
     canUserAccessFolder(currentUserId, folder, 'add')
   );
+
+  // Mettre à jour le dossier sélectionné quand la modal s'ouvre
+  useEffect(() => {
+    if (visible) {
+      console.log('🔄 Modal opened - currentFolderId:', currentFolderId);
+      console.log('🔄 Modal opened - accessibleFolders:', accessibleFolders.length);
+
+      // Si l'utilisateur est dans un dossier, le sélectionner par défaut
+      // Sinon, sélectionner le premier dossier accessible
+      if (currentFolderId) {
+        console.log('✅ Setting selectedFolderId to currentFolderId:', currentFolderId);
+        setSelectedFolderId(currentFolderId);
+      } else if (accessibleFolders.length > 0) {
+        console.log('✅ Setting selectedFolderId to first accessible folder:', accessibleFolders[0].id);
+        setSelectedFolderId(accessibleFolders[0].id);
+      } else {
+        console.warn('⚠️ No accessible folders!');
+      }
+    }
+  }, [visible, currentFolderId, accessibleFolders.length]);
+
+  console.log('📁 AddDocumentModal - All folders:', folders);
+  console.log('📁 AddDocumentModal - Accessible folders:', accessibleFolders);
+  console.log('📁 AddDocumentModal - Current folder ID:', currentFolderId);
+  console.log('📁 AddDocumentModal - Selected folder ID:', selectedFolderId);
 
   // Fonction pour sélectionner un fichier
   const pickDocument = async () => {
@@ -102,8 +122,13 @@ export default function AddDocumentModal({
   };
 
   const handleSubmit = () => {
+    console.log('🚀 Submit - selectedFile:', selectedFile?.name);
+    console.log('🚀 Submit - selectedFolderId:', selectedFolderId);
+
     if (selectedFile && selectedFolderId) {
       const fileType = getFileType(selectedFile.name, selectedFile.mimeType);
+
+      console.log('✅ Submitting document with folderId:', selectedFolderId);
 
       onAdd({
         nameDoc: selectedFile.name,
@@ -119,6 +144,11 @@ export default function AddDocumentModal({
       setSelectedFolderId(currentFolderId);
       setVisibility('association');
       onClose();
+    } else {
+      console.error('❌ Cannot submit - selectedFile:', !!selectedFile, 'selectedFolderId:', selectedFolderId);
+      if (!selectedFolderId) {
+        alert('Veuillez sélectionner un dossier');
+      }
     }
   };
 

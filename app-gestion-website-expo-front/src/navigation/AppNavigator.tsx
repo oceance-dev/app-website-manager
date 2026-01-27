@@ -107,13 +107,14 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
       }}
     >
       <View style={styles.container}>
-        {/* Sidebar - Desktop: fixed, Mobile: overlay - Hidden for Candidat */}
-        {isDesktop && currentUser?.role?.name !== 'candidat' && (
+        {/* Sidebar - Desktop: fixed, Mobile: overlay */}
+        {isDesktop && (
           <Animated.View style={{ width: sidebarWidth, overflow: 'hidden' }}>
             <Sidebar
               activeScreen={currentRoute}
               menuItems={filteredMenuItems}
               onNavigate={handleSidebarNavigate}
+              onLogout={onLogout}
             />
           </Animated.View>
         )}
@@ -172,8 +173,8 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
           </Stack.Navigator>
         </View>
 
-        {/* Mobile Sidebar Overlay - Hidden for Candidat */}
-        {!isDesktop && currentUser?.role?.name !== 'candidat' && (
+        {/* Mobile Sidebar Overlay */}
+        {!isDesktop && (
           <>
             {/* Backdrop */}
             <Animated.View
@@ -211,6 +212,7 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
                 activeScreen={currentRoute}
                 menuItems={filteredMenuItems}
                 onNavigate={handleSidebarNavigate}
+                onLogout={onLogout}
               />
             </Animated.View>
           </>
@@ -241,7 +243,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     zIndex: 1000,
-    backgroundColor: '#fff',
+    backgroundColor: '#1a2744',
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 0 },
     shadowOpacity: 0.3,

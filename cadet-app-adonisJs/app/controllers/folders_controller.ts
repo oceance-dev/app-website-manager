@@ -2,8 +2,14 @@ import type { HttpContext } from '@adonisjs/core/http'
 import Folder, { FolderVisibility, FolderType } from '#models/folder'
 import Document from '#models/document'
 import User from '#models/user'
+import { FolderService } from '#services/folder_service'
 
 export default class FoldersController {
+  private folderSerivce: FolderService
+
+  constructor() {
+    this.folderSerivce = new FolderService()
+  }
   /**
    * ========================================
    * CRUD DOSSIERS
@@ -128,6 +134,7 @@ export default class FoldersController {
 
     const body = request.only([
       'name',
+      'slug',
       'description',
       'parentId',
       'visibility',
@@ -181,54 +188,65 @@ export default class FoldersController {
       }
     }
 
-    // Générer le slug
-    const slug = Folder.generateSlug(body.name)
+    // Utiliser le slug fourni par le frontend (qui inclut userId et associationId)
+    // ou générer un slug simple si non fourni (compatibilité descendante)
+    const slug = body.slug || Folder.generateSlug(body.name)
 
-    // Vérifier l'unicité du slug dans le même parent
+    console.log('🏷️ Backend - Using slug:', slug)
+    console.log('📝 Backend - Folder name:', body.name)
+    console.log('👤 Backend - User ID:', currentUser.id)
+    console.log('🏢 Backend - Association ID:', currentUser.associationId)
+
+    // Vérifier l'unicité du slug dans toute l'association
+    // (le slug inclut déjà userId et associationId donc il est unique globalement)
     const existing = await Folder.query()
       .where('associationId', currentUser.associationId!)
       .where('slug', slug)
-      .where((q) => {
-        if (body.parentId) {
-          q.where('parentId', body.parentId)
-        } else {
-          q.whereNull('parentId')
-        }
-      })
       .first()
 
     if (existing) {
+      console.log('⚠️ Backend - Duplicate slug found:', existing.toJSON())
       return response.badRequest({
         success: false,
         message: 'Un dossier avec ce nom existe déjà à cet emplacement',
       })
     }
 
-    const folder = await Folder.create({
+    console.log('✅ Backend - No duplicate slug found, proceeding with creation')
+
+    const resultCreateFolder = await this.folderSerivce.createFolder({
       associationId: currentUser.associationId!,
       parentId: body.parentId || null,
       ownerId: currentUser.id,
       name: body.name,
-      slug,
       description: body.description || null,
-      color: body.color || null,
-      icon: body.icon || null,
       type,
       visibility,
       allowUpload: body.allowUpload ?? false,
       allowDownload: body.allowDownload ?? true,
       allowDelete: body.allowDelete ?? false,
       sortOrder: 0,
-      isActive: true,
       isPinned: false,
     })
+
+    if (!resultCreateFolder.success) { 
+      return response.badRequest({
+        success: false,
+        message: resultCreateFolder.error,
+      })
+    }
+
+    const physicalPath = await this.folderSerivce.getFolderPath(resultCreateFolder.folder!)
 
     return response.created({
       success: true,
       message: 'Dossier créé avec succès',
       data: {
-        folder: folder.toJSON(),
-      },
+        folder: {
+          ...resultCreateFolder.folder!.toJSON(),
+          physicalPath
+        }
+      }
     })
   }
 
@@ -359,6 +377,14 @@ export default class FoldersController {
     // Mettre à jour le slug si le nom change
     if (body.name && body.name !== folder.name) {
       const slug = Folder.generateSlug(body.name)
+      const renameResultFolder = await this.folderSerivce.rename(folder, body.name)
+
+      if (!renameResultFolder.success) {
+        return response.badRequest({
+          success: false,
+          message: renameResultFolder.error,
+        })
+      }
 
       // Vérifier l'unicité
       const existing = await Folder.query()
@@ -381,8 +407,8 @@ export default class FoldersController {
         })
       }
 
-      folder.name = body.name
-      folder.slug = slug
+      //folder.name = body.name
+      //folder.slug = slug
     }
 
     if (body.description !== undefined) folder.description = body.description
@@ -398,11 +424,14 @@ export default class FoldersController {
 
     await folder.save()
 
+    const physicalPath = await this.folderSerivce.getFolderPath(folder)
+
     return response.ok({
       success: true,
       message: 'Dossier mis à jour',
       data: {
         folder: folder.toJSON(),
+        physicalPath,
       },
     })
   }
@@ -470,16 +499,26 @@ export default class FoldersController {
           },
         })
       }
-
-      // Déplacer les documents vers la racine (sans dossier)
-      await Document.query().where('folderId', folder.id).update({ folderId: null })
-
-      // Supprimer les sous-dossiers récursivement
-      await this.deleteChildrenRecursively(folder.id)
     }
 
-    // Soft delete
-    await folder.softDelete()
+     // Options de suppression
+    const hardDelete = request.input('hardDelete', false)
+    const deletePhysical = request.input('deletePhysical', false)
+    const moveDocumentsToRoot = request.input('moveDocumentsToRoot', true)
+
+    // Supprimer via le service (BDD + physique)
+    const result = await this.folderSerivce.delete(folder, {
+      hardDelete,
+      deletePhysical,
+      moveDocumentsToRoot,
+    })
+
+    if (!result.success) {
+      return response.badRequest({
+        success: false,
+        message: result.error,
+      })
+    }
 
     return response.ok({
       success: true,
@@ -488,21 +527,113 @@ export default class FoldersController {
   }
 
   /**
-   * Supprimer les sous-dossiers récursivement
+   * POST /api/v1/folders/:id/move
+   * Déplacer un dossier vers un nouveau parent
    */
-  private async deleteChildrenRecursively(parentId: number): Promise<void> {
-    const children = await Folder.query().where('parentId', parentId).whereNull('deletedAt')
+  async move({ auth, params, request, response }: HttpContext) {
+    const currentUser = auth.user!
 
-    for (const child of children) {
-      // Déplacer les documents
-      await Document.query().where('folderId', child.id).update({ folderId: null })
-
-      // Supprimer les sous-dossiers
-      await this.deleteChildrenRecursively(child.id)
-
-      // Soft delete
-      await child.softDelete()
+    if (!currentUser.role) {
+      await currentUser.load('role')
     }
+
+    const folder = await Folder.query()
+      .where('id', params.id)
+      .whereNull('deletedAt')
+      .first()
+
+    if (!folder) {
+      return response.notFound({
+        success: false,
+        message: 'Dossier non trouvé',
+      })
+    }
+
+    // Vérifier les permissions
+    const permissions = await folder.getPermissions(currentUser)
+    if (!permissions.canManage) {
+      return response.forbidden({
+        success: false,
+        message: 'Vous n\'avez pas la permission de déplacer ce dossier',
+      })
+    }
+
+    // Les dossiers système ne peuvent pas être déplacés
+    if (folder.isSystem) {
+      return response.forbidden({
+        success: false,
+        message: 'Les dossiers système ne peuvent pas être déplacés',
+      })
+    }
+
+    const { newParentId } = request.only(['newParentId'])
+
+    // Vérifier le nouveau parent si spécifié
+    if (newParentId) {
+      const newParent = await Folder.query()
+        .where('id', newParentId)
+        .where('associationId', currentUser.associationId!)
+        .whereNull('deletedAt')
+        .first()
+
+      if (!newParent) {
+        return response.notFound({
+          success: false,
+          message: 'Dossier de destination non trouvé',
+        })
+      }
+    }
+
+    // Déplacer via le service
+    const result = await this.folderSerivce.move(folder, newParentId || null)
+
+    if (!result.success) {
+      return response.badRequest({
+        success: false,
+        message: result.error,
+      })
+    }
+
+    const physicalPath = await this.folderSerivce.getFolderPath(folder)
+
+    return response.ok({
+      success: true,
+      message: 'Dossier déplacé',
+      data: {
+        folder: {
+          ...folder.toJSON(),
+          physicalPath,
+        },
+      },
+    })
+  }
+
+  /**
+   * POST /api/v1/folders/sync
+   * Synchroniser les dossiers physiques avec la BDD
+   */
+  async sync({ auth, response }: HttpContext) {
+    const currentUser = auth.user!
+
+    if (!currentUser.role) {
+      await currentUser.load('role')
+    }
+
+    // Seuls les admins peuvent synchroniser
+    if (!currentUser.hasPermission('folders.manage') && !currentUser.isSuperAdmin) {
+      return response.forbidden({
+        success: false,
+        message: 'Vous n\'avez pas la permission de synchroniser les dossiers',
+      })
+    }
+
+    const result = await this.folderSerivce.syncPhysicalFolders(currentUser.associationId!)
+
+    return response.ok({
+      success: true,
+      message: `Synchronisation terminée: ${result.created} dossier(s) créé(s)`,
+      data: result,
+    })
   }
 
   /**
@@ -723,7 +854,9 @@ export default class FoldersController {
     const currentUser = auth.user!
 
     // Créer le dossier privé s'il n'existe pas
-    const folder = await Folder.createPrivateFolder(currentUser)
+    const folder = await this.folderSerivce.createPrivateFolder(currentUser.associationId!, currentUser.id)
+
+    const physicalPath = await this.folderSerivce.getFolderPath(folder)
 
     // Charger les documents
     const documents = await Document.query()
@@ -736,6 +869,7 @@ export default class FoldersController {
       data: {
         folder: folder.toJSON(),
         documents: documents.map((d) => d.toJSON()),
+        physicalPath,
       },
     })
   }

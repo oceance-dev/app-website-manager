@@ -1,8 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Platform, StatusBar } from 'react-native';
-import { Settings, LogOut, User, Search, Bell, Menu } from 'lucide-react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar } from 'react-native';
+import { Settings, LogOut, Bell, Menu } from 'lucide-react-native';
 import { MenuItem } from '../../types';
-import { isWeb, isMobile, getFontSize, getSpacing, getResponsivePadding, MIN_TOUCH_TARGET } from '../../utils/responsive';
+import { isWeb, getResponsivePadding } from '../../utils/responsive';
+import { colors, textStyles, spacing, borderRadius, shadows } from '../../theme';
+import { AuthApi } from '../../api';
 
 interface HeaderProps {
   activeScreen: string;
@@ -15,6 +17,40 @@ interface HeaderProps {
 
 export default function Header({ activeScreen, menuItems, onLogout, onSettings, onProfile, onToggleSidebar }: HeaderProps) {
   const currentMenuItem = menuItems.find(item => item.screen === activeScreen);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    loadUserInfo();
+  }, []);
+
+  const loadUserInfo = async () => {
+    try {
+      const response = await AuthApi.getMe();
+      if (response.success && response.data) {
+        setCurrentUser(response.data.user);
+      }
+    } catch (error) {
+      console.error('Error loading user:', error);
+    }
+  };
+
+  const getUserInitials = () => {
+    if (!currentUser) return 'U';
+    const firstInitial = currentUser.firstName?.[0] || currentUser.firstname?.[0] || '';
+    const lastInitial = currentUser.lastName?.[0] || currentUser.lastname?.[0] || '';
+    return (firstInitial + lastInitial).toUpperCase() || 'U';
+  };
+
+  const getUserName = () => {
+    if (!currentUser) return 'Utilisateur';
+    const firstName = currentUser.firstName || currentUser.firstname || '';
+    const lastName = currentUser.lastName || currentUser.lastname || '';
+    return `${firstName} ${lastName}`.trim() || 'Utilisateur';
+  };
+
+  const getUserRole = () => {
+    return currentUser?.role?.displayName || currentUser?.role?.name || 'Membre';
+  };
 
   const paddingTop = isWeb ? 0 : Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 0) + 10;
 
@@ -27,27 +63,17 @@ export default function Header({ activeScreen, menuItems, onLogout, onSettings, 
           onPress={onToggleSidebar}
           activeOpacity={0.7}
         >
-          <Menu color="#64748b" size={24} strokeWidth={2} />
+          <Menu color={colors.gray[600]} size={24} strokeWidth={2} />
         </TouchableOpacity>
 
-        {/* Right Section - Search & Icons */}
+        {/* Right Section - Icons */}
         <View style={styles.rightSection}>
-          {/* Search Bar */}
-          <View style={styles.searchContainer}>
-            <Search color="#94a3b8" size={18} />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Rechercher..."
-              placeholderTextColor="#94a3b8"
-            />
-          </View>
-
           {/* Notification Bell */}
           <TouchableOpacity
             style={styles.iconButton}
             activeOpacity={0.7}
           >
-            <Bell color="#64748b" size={20} strokeWidth={2} />
+            <Bell color={colors.gray[600]} size={20} strokeWidth={2} />
             <View style={styles.notificationBadge} />
           </TouchableOpacity>
 
@@ -57,7 +83,7 @@ export default function Header({ activeScreen, menuItems, onLogout, onSettings, 
             onPress={onSettings}
             activeOpacity={0.7}
           >
-            <Settings color="#64748b" size={20} strokeWidth={2} />
+            <Settings color={colors.gray[600]} size={20} strokeWidth={2} />
           </TouchableOpacity>
 
           {/* Divider */}
@@ -70,11 +96,11 @@ export default function Header({ activeScreen, menuItems, onLogout, onSettings, 
             activeOpacity={0.7}
           >
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>AD</Text>
+              <Text style={styles.avatarText}>{getUserInitials()}</Text>
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>Admin User</Text>
-              <Text style={styles.profileRole}>Administrateur</Text>
+              <Text style={styles.profileName} numberOfLines={1}>{getUserName()}</Text>
+              <Text style={styles.profileRole} numberOfLines={1}>{getUserRole()}</Text>
             </View>
           </TouchableOpacity>
 
@@ -84,7 +110,7 @@ export default function Header({ activeScreen, menuItems, onLogout, onSettings, 
             onPress={onLogout}
             activeOpacity={0.7}
           >
-            <LogOut color="#ef4444" size={20} strokeWidth={2} />
+            <LogOut color={colors.error} size={20} strokeWidth={2} />
           </TouchableOpacity>
         </View>
       </View>
@@ -94,57 +120,40 @@ export default function Header({ activeScreen, menuItems, onLogout, onSettings, 
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.white,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: colors.gray[100],
+    ...shadows.sm,
   },
   content: {
-    flexDirection: isMobile ? 'column' : 'row',
+    flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: isMobile ? 'stretch' : 'center',
+    alignItems: 'center',
     paddingHorizontal: getResponsivePadding(),
     paddingVertical: getResponsivePadding(),
-    minHeight: isMobile ? 'auto' : 72,
-    gap: isMobile ? 12 : 0,
+    minHeight: 72,
   },
   menuButton: {
-    width: MIN_TOUCH_TARGET,
-    height: MIN_TOUCH_TARGET,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.gray[50],
   },
   rightSection: {
-    flexDirection: isMobile ? 'column' : 'row',
-    alignItems: isMobile ? 'stretch' : 'center',
-    gap: 12,
-  },
-  searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
-    borderRadius: 10,
-    paddingHorizontal: getSpacing(12),
-    paddingVertical: isMobile ? 12 : 8,
-    gap: 8,
-    minWidth: isMobile ? '100%' : 240,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
+    gap: spacing[3],
   },
-  searchInput: {
-    flex: 1,
-    fontSize: getFontSize(14),
-    color: '#1e293b',
-    outlineStyle: 'none',
-  } as any,
   iconButton: {
-    width: MIN_TOUCH_TARGET,
-    height: MIN_TOUCH_TARGET,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    backgroundColor: colors.gray[50],
   },
   notificationBadge: {
     position: 'absolute',
@@ -152,61 +161,62 @@ const styles = StyleSheet.create({
     right: 8,
     width: 8,
     height: 8,
-    borderRadius: 4,
-    backgroundColor: '#ef4444',
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.error,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: colors.white,
   },
   divider: {
     width: 1,
     height: 32,
-    backgroundColor: '#e2e8f0',
-    marginHorizontal: 4,
+    backgroundColor: colors.gray[200],
+    marginHorizontal: spacing[1],
   },
   profileButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: isMobile ? 12 : 6,
-    paddingHorizontal: isMobile ? 12 : 8,
-    borderRadius: 10,
-    minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
+    gap: spacing[2],
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[2],
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.gray[50],
   },
   avatar: {
     width: 40,
     height: 40,
-    borderRadius: 10,
-    backgroundColor: '#2563eb',
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.navy,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    fontSize: getFontSize(14),
+    ...textStyles.label,
     fontWeight: '700',
-    color: '#fff',
+    color: colors.white,
   },
   profileInfo: {
     alignItems: 'flex-start',
-    display: isMobile ? 'none' : 'flex',
+    minWidth: 0,
+    maxWidth: 120,
   },
   profileName: {
-    fontSize: getFontSize(14),
+    ...textStyles.body,
     fontWeight: '600',
-    color: '#1e293b',
+    color: colors.navy,
   },
   profileRole: {
-    fontSize: getFontSize(12),
-    color: '#64748b',
+    ...textStyles.caption,
+    color: colors.gray[600],
     marginTop: 2,
   },
   logoutButton: {
-    width: MIN_TOUCH_TARGET,
-    height: MIN_TOUCH_TARGET,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fef2f2',
+    backgroundColor: colors.errorLight,
     borderWidth: 1,
-    borderColor: '#fee2e2',
+    borderColor: colors.error + '40',
   },
 });

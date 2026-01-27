@@ -35,6 +35,14 @@ export default class extends BaseSchema {
         .inTable('users')
         .onDelete('SET NULL')
 
+      table
+        .integer('document_requirement_id')
+        .unsigned()
+        .nullable()
+        .references('id')
+        .inTable('association_document_requirements')
+        .onDelete('SET NULL')
+
       // Informations du document
       table.string('name', 255).notNullable() // Nom affiché
       table.string('original_name', 255).notNullable() // Nom original du fichier

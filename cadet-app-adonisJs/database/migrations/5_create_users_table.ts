@@ -34,9 +34,9 @@ export default class extends BaseSchema {
       table.string('lastname', 100).notNullable()
       table.string('firstname', 100).notNullable()
       table.string('city_code', 10).notNullable()
-      table.string('phone', 20).notNullable()
-      table.timestamp('date_of_birth').notNullable()
-      table.enum('sexe', ['Homme', 'Femme']).notNullable()
+      table.string('phone', 20).nullable()
+      table.timestamp('date_of_birth').nullable()
+      table.enum('sexe', ['Homme', 'Femme']).nullable()
 
       // Statut
       table.boolean('is_active').notNullable().defaultTo(false)

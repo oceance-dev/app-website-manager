@@ -82,6 +82,22 @@ export const registerAssociationValidator = vine.compile(
                 .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).+$/),
 
             passwordConfirmation: vine.string().sameAs('password'),
+
+            phone: vine
+                .string()
+                .trim()
+                .regex(/^(?:(?:\+|00)33|0)\s*[1-9](?:[\s.-]*\d{2}){4}$/),
+
+            city_code: vine
+                .string()
+                .trim()
+                .regex(/^\d{5}$/),
+
+            dateOfBirth: vine.date({
+                formats: ['YYYY-MM-DD', 'DD/MM/YYYY'],
+            }).optional(),
+
+            sexe: vine.enum(['Homme', 'Femme']).optional(),
         })
     })
 )
@@ -158,6 +174,78 @@ export const registerAssociationMemberValidator = vine.compile(
                         .first()
                     return !!role
                 })
+        })
+    })
+)
+
+/**
+ * Validation de l'inscription pour un candidat de l'association
+ */
+export const registerAssociationCandidatValidator = vine.compile(
+    vine.object({
+        candidat: vine.object({
+            firstname: vine
+                .string()
+                .trim()
+                .minLength(2)
+                .maxLength(100),
+
+            lastname: vine
+                .string()
+                .trim()
+                .minLength(2)
+                .maxLength(100),
+
+            email: vine
+                .string()
+                .email()
+                .normalizeEmail()
+                .unique(async (db, value) => {
+                    const exists = await db.from('users').where('email', value).first()
+                    return !exists
+                }),
+            password: vine
+                .string()
+                .minLength(12)
+                .maxLength(128)
+                .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).+$/),
+
+            passwordConfirmation: vine.string().sameAs('password'),
+
+            city_code: vine
+                .string()
+                .trim()
+                .regex(/^\d{5}$/),
+
+            dateOfBirth: vine.date({
+                formats: ['YYYY-MM-DD', 'DD/MM/YYYY'],
+            }),
+
+            sexe: vine.enum(['Homme', 'Femme']),
+        }), 
+
+        parent: vine.object({
+             emailParent: vine
+                .string()
+                .email()
+                .normalizeEmail()
+                .unique(async (db, value) => {
+                    const exists = await db.from('candidats').where('email_parent', value).first()
+                    return !exists
+                }),
+            phoneParent: vine
+                .string()
+                .trim(),
+            firstNameParent: vine
+                .string()
+                .trim()
+                .minLength(2)
+                .maxLength(100),
+            lastNameParent: vine
+                .string()
+                .trim()
+                .minLength(2)
+                .maxLength(100),
         })
     })
 )

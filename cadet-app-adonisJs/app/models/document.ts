@@ -4,6 +4,7 @@ import Association from './association.js'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
 import User from './user.js'
 import Folder from './folder.js'
+import AssociationDocumentRequirement from './association_document_requirement.js'
 
 export type DocumentCategory =
   | 'identity'
@@ -78,6 +79,9 @@ export default class Document extends BaseModel {
 
   @column()
   declare folderId: number | null
+
+  @column()
+  declare documentRequirementId: number | null
 
   @column()
   declare name: string
@@ -169,6 +173,9 @@ export default class Document extends BaseModel {
 
   @belongsTo(() => Folder, { foreignKey: 'folderId' })
   declare folder: BelongsTo<typeof Folder>
+
+  @belongsTo(() => AssociationDocumentRequirement, { foreignKey: 'documentRequirementsId' })
+  declare documentRequirement: BelongsTo<typeof AssociationDocumentRequirement>
 
   @belongsTo(() => Document, { foreignKey: 'parentId' })
   declare parent: BelongsTo<typeof Document>
@@ -347,7 +354,8 @@ export default class Document extends BaseModel {
       associationId: this.associationId,
       userId: this.userId,
       candidatId: this.candidatId,
-      folderId: null, // TODO: Implémenter le système de dossiers côté backend
+      folderId: this.folderId,
+      documentRequirementId: this.documentRequirementId,
       name: this.name,
       originalName: this.originalName,
       fileName: this.originalName,

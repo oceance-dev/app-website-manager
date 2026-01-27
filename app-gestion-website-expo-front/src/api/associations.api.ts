@@ -142,13 +142,34 @@ export const AssociationsApi = {
 
   /**
    * Permet de rejeteer un membre d'une association
-   * @param id 
-   * @param reason 
-   * @returns 
+   * @param id
+   * @param reason
+   * @returns
    */
   async rejectMember(id: number, reason: string): Promise<ApiResponse<{ member: Member }>> {
     const data = await api.post<{ member: Member }>(UrlApi.associationsApi.admin.members.rejectMember(id), { reason });
     return { success: true, data };
+  },
+
+  /**
+   * Suspendre un membre d'une association
+   * @param id
+   * @param reason
+   * @returns
+   */
+  async suspendMember(id: number, reason: string): Promise<ApiResponse<{ member: Member }>> {
+    const data = await api.post<{ member: Member }>(UrlApi.associationsApi.admin.members.suspendMember(id), { reason });
+    return { success: true, data };
+  },
+
+  /**
+   * Supprimer un membre d'une association
+   * @param id
+   * @returns
+   */
+  async deleteMember(id: number): Promise<ApiResponse<void>> {
+    await api.delete(UrlApi.associationsApi.admin.members.deleteMember(id));
+    return { success: true, data: undefined };
   },
 
   /**

@@ -11,11 +11,14 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { Users, Building2, CheckCircle, Clock, XCircle, TrendingUp, ThumbsUp, ThumbsDown, Pause, Play } from 'lucide-react-native';
+import { Users, Building2, CheckCircle, Clock, XCircle, TrendingUp, ThumbsUp, ThumbsDown, Pause, Play, Shield } from 'lucide-react-native';
 import { isWeb, isMobile, getFontSize, getSpacing, getResponsivePadding, MIN_TOUCH_TARGET } from '../utils/responsive';
 import { AssociationsApi, AssociationWithStats, ApiError, UsersApi, UserResponse } from '../api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '../components/ui/button';
+import RoleManagement from '../components/RoleManagement';
+import { colors, textStyles, spacing, shadows, borderRadius } from '../theme';
+import { StatCard, Card, Badge } from '../components/cadep';
 
 interface Stats {
   totalAssociations: number;
@@ -46,7 +49,7 @@ interface UserDisplay {
 }
 
 export default function SuperAdminDashboardScreen() {
-  const [activeTab, setActiveTab] = useState<'overview' | 'associations' | 'users'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'associations' | 'users' | 'roles'>('overview');
   const [associations, setAssociations] = useState<AssociationWithStats[]>([]);
   const [users, setUsers] = useState<UserDisplay[]>([]);
   const [stats, setStats] = useState<Stats>({
@@ -61,9 +64,13 @@ export default function SuperAdminDashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    loadAssociations();
-    loadUsers();
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    await loadAssociations();
+    await loadUsers();
+  };
 
   const loadAssociations = async () => {
     try {
@@ -141,10 +148,10 @@ export default function SuperAdminDashboardScreen() {
     }
   };
 
-  const onRefresh = () => {
+  const onRefresh = async () => {
     setRefreshing(true);
-    loadAssociations();
-    loadUsers();
+    await loadAssociations();
+    await loadUsers();
   };
 
   const handleApprove = async (id: number) => {
@@ -157,7 +164,8 @@ export default function SuperAdminDashboardScreen() {
         Alert.alert('Succès', 'Association approuvée');
       }
 
-      loadAssociations();
+      await loadAssociations();
+      await loadUsers();
     } catch (error) {
       console.error('Error approving association:', error);
       const message = error instanceof ApiError ? error.message : 'Erreur lors de l\'approbation';
@@ -179,7 +187,8 @@ export default function SuperAdminDashboardScreen() {
         Alert.alert('Succès', 'Association rejetée');
       }
 
-      loadAssociations();
+      await loadAssociations();
+      await loadUsers();
     } catch (error) {
       console.error('Error rejecting association:', error);
       const message = error instanceof ApiError ? error.message : 'Erreur lors du rejet';
@@ -201,7 +210,8 @@ export default function SuperAdminDashboardScreen() {
         Alert.alert('Succès', 'Association suspendue');
       }
 
-      loadAssociations();
+      await loadAssociations();
+      await loadUsers();
     } catch (error) {
       console.error('Error suspending association:', error);
       const message = error instanceof ApiError ? error.message : 'Erreur lors de la suspension';
@@ -223,7 +233,8 @@ export default function SuperAdminDashboardScreen() {
         Alert.alert('Succès', 'Association réactivée');
       }
 
-      loadAssociations();
+      await loadAssociations();
+      await loadUsers();
     } catch (error) {
       console.error('Error reactivating association:', error);
       const message = error instanceof ApiError ? error.message : 'Erreur lors de la réactivation';
@@ -238,13 +249,15 @@ export default function SuperAdminDashboardScreen() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
-        return '#10b981';
+        return colors.success;
       case 'pending':
-        return '#f59e0b';
+        return colors.warning;
       case 'rejected':
-        return '#ef4444';
+        return colors.error;
+      case 'suspended':
+        return colors.warning;
       default:
-        return '#6b7280';
+        return colors.gray[600];
     }
   };
 
@@ -256,6 +269,8 @@ export default function SuperAdminDashboardScreen() {
         return 'En attente';
       case 'rejected':
         return 'Rejetée';
+      case 'suspended':
+        return 'Suspendue';
       default:
         return status;
     }
@@ -266,8 +281,8 @@ export default function SuperAdminDashboardScreen() {
   if (isLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingTop }]}>
-        <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={{ marginTop: 16, color: '#64748b' }}>Chargement...</Text>
+        <ActivityIndicator size="large" color={colors.navy} />
+        <Text style={{ marginTop: spacing[4], color: colors.gray[600] }}>Chargement...</Text>
       </View>
     );
   }
@@ -289,7 +304,7 @@ export default function SuperAdminDashboardScreen() {
           style={[styles.tab, activeTab === 'overview' && styles.tabActive]}
           onPress={() => setActiveTab('overview')}
         >
-          <TrendingUp size={20} color={activeTab === 'overview' ? '#2563eb' : '#64748b'} />
+          <TrendingUp size={20} color={activeTab === 'overview' ? colors.navy : colors.gray[600]} />
           <Text style={[styles.tabText, activeTab === 'overview' && styles.tabTextActive]}>Vue d'ensemble</Text>
         </TouchableOpacity>
 
@@ -297,7 +312,7 @@ export default function SuperAdminDashboardScreen() {
           style={[styles.tab, activeTab === 'associations' && styles.tabActive]}
           onPress={() => setActiveTab('associations')}
         >
-          <Building2 size={20} color={activeTab === 'associations' ? '#2563eb' : '#64748b'} />
+          <Building2 size={20} color={activeTab === 'associations' ? colors.navy : colors.gray[600]} />
           <Text style={[styles.tabText, activeTab === 'associations' && styles.tabTextActive]}>Associations</Text>
         </TouchableOpacity>
 
@@ -305,8 +320,16 @@ export default function SuperAdminDashboardScreen() {
           style={[styles.tab, activeTab === 'users' && styles.tabActive]}
           onPress={() => setActiveTab('users')}
         >
-          <Users size={20} color={activeTab === 'users' ? '#2563eb' : '#64748b'} />
+          <Users size={20} color={activeTab === 'users' ? colors.navy : colors.gray[600]} />
           <Text style={[styles.tabText, activeTab === 'users' && styles.tabTextActive]}>Utilisateurs</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'roles' && styles.tabActive]}
+          onPress={() => setActiveTab('roles')}
+        >
+          <Shield size={20} color={activeTab === 'roles' ? colors.navy : colors.gray[600]} />
+          <Text style={[styles.tabText, activeTab === 'roles' && styles.tabTextActive]}>Rôles</Text>
         </TouchableOpacity>
       </View>
 
@@ -316,91 +339,93 @@ export default function SuperAdminDashboardScreen() {
           {/* Section Associations */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Building2 size={20} color="#2563eb" />
+              <Building2 size={20} color={colors.navy} />
               <Text style={styles.sectionTitle}>Associations</Text>
             </View>
             <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: '#dbeafe' }]}>
-                  <Building2 size={24} color="#2563eb" />
-                </View>
-                <Text style={styles.statValue}>{stats.totalAssociations}</Text>
-                <Text style={styles.statLabel}>Total</Text>
-              </View>
-
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: '#dcfce7' }]}>
-                  <CheckCircle size={24} color="#10b981" />
-                </View>
-                <Text style={styles.statValue}>{stats.activeAssociations}</Text>
-                <Text style={styles.statLabel}>Actives</Text>
-              </View>
-
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
-                  <Clock size={24} color="#f59e0b" />
-                </View>
-                <Text style={styles.statValue}>{stats.pendingAssociations}</Text>
-                <Text style={styles.statLabel}>En attente</Text>
-              </View>
-
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: '#fee2e2' }]}>
-                  <XCircle size={24} color="#ef4444" />
-                </View>
-                <Text style={styles.statValue}>{stats.rejectedAssociations}</Text>
-                <Text style={styles.statLabel}>Rejetées/Suspendues</Text>
-              </View>
+              <StatCard
+                title="Total"
+                value={stats.totalAssociations.toString()}
+                icon={Building2}
+                iconColor={colors.navy}
+                iconBackground={colors.navyLight + '20'}
+                style={styles.statCardItem}
+              />
+              <StatCard
+                title="Actives"
+                value={stats.activeAssociations.toString()}
+                icon={CheckCircle}
+                iconColor={colors.success}
+                iconBackground={colors.successLight}
+                style={styles.statCardItem}
+              />
+              <StatCard
+                title="En attente"
+                value={stats.pendingAssociations.toString()}
+                icon={Clock}
+                iconColor={colors.warning}
+                iconBackground={colors.warningLight}
+                style={styles.statCardItem}
+              />
+              <StatCard
+                title="Rejetées/Suspendues"
+                value={stats.rejectedAssociations.toString()}
+                icon={XCircle}
+                iconColor={colors.error}
+                iconBackground={colors.errorLight}
+                style={styles.statCardItem}
+              />
             </View>
           </View>
 
           {/* Section Utilisateurs */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Users size={20} color="#2563eb" />
+              <Users size={20} color={colors.navy} />
               <Text style={styles.sectionTitle}>Utilisateurs</Text>
             </View>
             <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: '#dbeafe' }]}>
-                  <Users size={24} color="#2563eb" />
-                </View>
-                <Text style={styles.statValue}>{stats.totalUsers}</Text>
-                <Text style={styles.statLabel}>Total</Text>
-              </View>
-
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: '#dcfce7' }]}>
-                  <CheckCircle size={24} color="#10b981" />
-                </View>
-                <Text style={styles.statValue}>{stats.activeUsers}</Text>
-                <Text style={styles.statLabel}>Actifs</Text>
-              </View>
-
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: '#e0e7ff' }]}>
-                  <Users size={24} color="#6366f1" />
-                </View>
-                <Text style={styles.statValue}>{stats.totalUsers - stats.activeUsers}</Text>
-                <Text style={styles.statLabel}>Inactifs</Text>
-              </View>
-
-              <View style={styles.statCard}>
-                <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
-                  <Clock size={24} color="#f59e0b" />
-                </View>
-                <Text style={styles.statValue}>{users.filter(u => !u.isActive).length}</Text>
-                <Text style={styles.statLabel}>En attente</Text>
-              </View>
+              <StatCard
+                title="Total"
+                value={stats.totalUsers.toString()}
+                icon={Users}
+                iconColor={colors.navy}
+                iconBackground={colors.navyLight + '20'}
+                style={styles.statCardItem}
+              />
+              <StatCard
+                title="Actifs"
+                value={stats.activeUsers.toString()}
+                icon={CheckCircle}
+                iconColor={colors.success}
+                iconBackground={colors.successLight}
+                style={styles.statCardItem}
+              />
+              <StatCard
+                title="Inactifs"
+                value={(stats.totalUsers - stats.activeUsers).toString()}
+                icon={Users}
+                iconColor={colors.gray[600]}
+                iconBackground={colors.gray[100]}
+                style={styles.statCardItem}
+              />
+              <StatCard
+                title="En attente"
+                value={users.filter(u => !u.isActive).length.toString()}
+                icon={Clock}
+                iconColor={colors.warning}
+                iconBackground={colors.warningLight}
+                style={styles.statCardItem}
+              />
             </View>
           </View>
 
           {/* Recent Activity */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Activité récente</Text>
-            <View style={styles.card}>
+            <Card>
               <Text style={styles.emptyText}>Aucune activité récente</Text>
-            </View>
+            </Card>
           </View>
         </View>
       )}
@@ -410,22 +435,25 @@ export default function SuperAdminDashboardScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Toutes les associations ({associations.length})</Text>
             {associations.length === 0 ? (
-              <View style={styles.card}>
+              <Card>
                 <Text style={styles.emptyText}>Aucune association</Text>
-              </View>
+              </Card>
             ) : (
               associations.map((association) => (
-                <View key={association.id} style={styles.card}>
+                <Card key={association.id} style={styles.cardItem}>
                   <View style={styles.cardHeader}>
                     <View style={styles.cardHeaderLeft}>
-                      <Building2 size={20} color="#2563eb" />
+                      <Building2 size={20} color={colors.navy} />
                       <Text style={styles.cardTitle}>{association.name}</Text>
                     </View>
-                    <View style={[styles.badge, { backgroundColor: getStatusColor(association.status) + '20' }]}>
-                      <Text style={[styles.badgeText, { color: getStatusColor(association.status) }]}>
-                        {getStatusText(association.status)}
-                      </Text>
-                    </View>
+                    <Badge
+                      text={getStatusText(association.status)}
+                      variant={
+                        association.status === 'active' ? 'active' :
+                        association.status === 'pending' ? 'pending' :
+                        'inactive'
+                      }
+                    />
                   </View>
                   <View style={styles.cardContent}>
                     <Text style={styles.cardDetail}>📍 {association.city} ({association.postalCode})</Text>
@@ -440,41 +468,41 @@ export default function SuperAdminDashboardScreen() {
                     {association.status === 'pending' && (
                       <>
                         <TouchableOpacity
-                          style={[styles.actionButton, { backgroundColor: '#dcfce7' }]}
+                          style={[styles.actionButton, { backgroundColor: colors.successLight }]}
                           onPress={() => handleApprove(association.id)}
                         >
-                          <ThumbsUp size={16} color="#10b981" />
-                          <Text style={[styles.actionButtonText, { color: '#10b981' }]}>Approuver</Text>
+                          <ThumbsUp size={16} color={colors.success} />
+                          <Text style={[styles.actionButtonText, { color: colors.success }]}>Approuver</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
-                          style={[styles.actionButton, { backgroundColor: '#fee2e2' }]}
+                          style={[styles.actionButton, { backgroundColor: colors.errorLight }]}
                           onPress={() => handleReject(association.id)}
                         >
-                          <ThumbsDown size={16} color="#ef4444" />
-                          <Text style={[styles.actionButtonText, { color: '#ef4444' }]}>Rejeter</Text>
+                          <ThumbsDown size={16} color={colors.error} />
+                          <Text style={[styles.actionButtonText, { color: colors.error }]}>Rejeter</Text>
                         </TouchableOpacity>
                       </>
                     )}
                     {association.status === 'active' && (
                       <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: '#fef3c7' }]}
+                        style={[styles.actionButton, { backgroundColor: colors.warningLight }]}
                         onPress={() => handleSuspend(association.id)}
                       >
-                        <Pause size={16} color="#f59e0b" />
-                        <Text style={[styles.actionButtonText, { color: '#f59e0b' }]}>Suspendre</Text>
+                        <Pause size={16} color={colors.warning} />
+                        <Text style={[styles.actionButtonText, { color: colors.warning }]}>Suspendre</Text>
                       </TouchableOpacity>
                     )}
                     {association.status === 'suspended' && (
                       <TouchableOpacity
-                        style={[styles.actionButton, { backgroundColor: '#dcfce7' }]}
+                        style={[styles.actionButton, { backgroundColor: colors.successLight }]}
                         onPress={() => handleReactivate(association.id)}
                       >
-                        <Play size={16} color="#10b981" />
-                        <Text style={[styles.actionButtonText, { color: '#10b981' }]}>Réactiver</Text>
+                        <Play size={16} color={colors.success} />
+                        <Text style={[styles.actionButtonText, { color: colors.success }]}>Réactiver</Text>
                       </TouchableOpacity>
                     )}
                   </View>
-                </View>
+                </Card>
               ))
             )}
           </View>
@@ -486,27 +514,30 @@ export default function SuperAdminDashboardScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Tous les utilisateurs ({users.length})</Text>
             {users.map((user) => (
-              <View key={user.id} style={styles.card}>
+              <Card key={user.id} style={styles.cardItem}>
                 <View style={styles.cardHeader}>
                   <View style={styles.cardHeaderLeft}>
-                    <Users size={20} color="#2563eb" />
+                    <Users size={20} color={colors.navy} />
                     <Text style={styles.cardTitle}>{user.firstname} {user.lastname}</Text>
                   </View>
-                  <View style={[styles.badge, { backgroundColor: user.isActive ? '#dcfce7' : '#fee2e2' }]}>
-                    <Text style={[styles.badgeText, { color: user.isActive ? '#10b981' : '#ef4444' }]}>
-                      {user.isActive ? 'Actif' : 'Inactif'}
-                    </Text>
-                  </View>
+                  <Badge
+                    text={user.isActive ? 'Actif' : 'Inactif'}
+                    variant={user.isActive ? 'active' : 'inactive'}
+                  />
                 </View>
                 <View style={styles.cardContent}>
                   <Text style={styles.cardDetail}>✉️ {user.email}</Text>
                   <Text style={styles.cardDetail}>👤 {user.role}</Text>
                   <Text style={styles.cardDetail}>🏢 {user.associationName}</Text>
                 </View>
-              </View>
+              </Card>
             ))}
           </View>
         </View>
+      )}
+
+      {activeTab === 'roles' && (
+        <RoleManagement />
       )}
     </ScrollView>
   );
@@ -515,53 +546,52 @@ export default function SuperAdminDashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
   },
   header: {
     padding: getResponsivePadding(),
-    backgroundColor: '#fff',
+    backgroundColor: colors.white,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: colors.border,
   },
   title: {
-    fontSize: getFontSize(isMobile ? 20 : 24),
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 4,
+    ...textStyles.h2,
+    color: colors.navy,
+    marginBottom: spacing[1],
   },
   subtitle: {
-    fontSize: getFontSize(isMobile ? 12 : 14),
-    color: '#64748b',
+    ...textStyles.body,
+    color: colors.gray[600],
   },
   tabsContainer: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: colors.white,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    paddingHorizontal: isMobile ? 8 : 20,
+    borderBottomColor: colors.border,
+    paddingHorizontal: isMobile ? spacing[2] : spacing[5],
     flexWrap: isMobile ? 'wrap' : 'nowrap',
   },
   tab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: isMobile ? 12 : 16,
-    paddingHorizontal: isMobile ? 12 : 16,
-    marginRight: isMobile ? 4 : 8,
-    gap: 8,
+    paddingVertical: isMobile ? spacing[3] : spacing[4],
+    paddingHorizontal: isMobile ? spacing[3] : spacing[4],
+    marginRight: isMobile ? spacing[1] : spacing[2],
+    gap: spacing[2],
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
     minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   tabActive: {
-    borderBottomColor: '#2563eb',
+    borderBottomColor: colors.navy,
   },
   tabText: {
-    fontSize: getFontSize(isMobile ? 12 : 14),
-    color: '#64748b',
+    ...textStyles.body,
+    color: colors.gray[600],
     fontWeight: '500',
   },
   tabTextActive: {
-    color: '#2563eb',
+    color: colors.navy,
     fontWeight: '600',
   },
   content: {
@@ -570,120 +600,78 @@ const styles = StyleSheet.create({
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
-    marginBottom: 24,
+    gap: spacing[4],
+    marginBottom: spacing[6],
   },
-  statCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: getSpacing(16),
+  statCardItem: {
     flex: 1,
     minWidth: isWeb ? 150 : '45%',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    minHeight: isMobile ? 120 : 'auto',
-  },
-  statIcon: {
-    width: isMobile ? 40 : 48,
-    height: isMobile ? 40 : 48,
-    borderRadius: isMobile ? 20 : 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  statValue: {
-    fontSize: getFontSize(isMobile ? 24 : 32),
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: getFontSize(12),
-    color: '#64748b',
-    textAlign: 'center',
   },
   section: {
-    marginBottom: 24,
+    marginBottom: spacing[6],
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-    paddingBottom: 12,
+    gap: spacing[2],
+    marginBottom: spacing[4],
+    paddingBottom: spacing[3],
     borderBottomWidth: 2,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: colors.border,
   },
   sectionTitle: {
-    fontSize: getFontSize(isMobile ? 16 : 18),
-    fontWeight: '600',
-    color: '#1e293b',
+    ...textStyles.h3,
+    color: colors.navy,
   },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: getSpacing(16),
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+  cardItem: {
+    marginBottom: spacing[3],
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: spacing[3],
   },
   cardHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing[3],
     flex: 1,
   },
   cardTitle: {
-    fontSize: getFontSize(16),
-    fontWeight: '600',
-    color: '#1e293b',
+    ...textStyles.h4,
+    color: colors.navy,
   },
   cardContent: {
-    gap: 8,
+    gap: spacing[2],
   },
   cardDetail: {
-    fontSize: getFontSize(14),
-    color: '#64748b',
-  },
-  badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...textStyles.body,
+    color: colors.gray[600],
   },
   emptyText: {
     textAlign: 'center',
-    color: '#64748b',
-    padding: 20,
+    color: colors.gray[600],
+    padding: spacing[5],
   },
   actionButtons: {
     flexDirection: isMobile ? 'column' : 'row',
-    gap: 8,
-    marginTop: 12,
+    gap: spacing[2],
+    marginTop: spacing[3],
     flexWrap: 'wrap',
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: getSpacing(12),
-    paddingVertical: isMobile ? 12 : 8,
-    borderRadius: 8,
+    gap: spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingVertical: isMobile ? spacing[3] : spacing[2],
+    borderRadius: borderRadius.md,
     minHeight: isMobile ? MIN_TOUCH_TARGET : 'auto',
   },
   actionButtonText: {
-    fontSize: getFontSize(isMobile ? 14 : 12),
+    ...textStyles.label,
     fontWeight: '600',
   },
 });

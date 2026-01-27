@@ -21,6 +21,8 @@ export interface RegisterAssociationData {
     email: string;
     password: string;
     passwordConfirmation: string;
+    city_code: string;
+    phone?: string;
   };
 }
 
@@ -107,6 +109,38 @@ export interface RegisterMemberResponse {
   user: AuthUser;
 }
 
+export interface RegisterCandidatData {
+  candidat: {
+    firstname: string;
+    lastname: string;
+    email: string;
+    password: string;
+    passwordConfirmation: string;
+    city_code: string;
+    dateOfBirth: string; // Format: YYYY-MM-DD ou DD/MM/YYYY
+    sexe: 'Homme' | 'Femme';
+  };
+  parent: {
+    emailParent: string;
+    phoneParent: string;
+    firstNameParent: string;
+    lastNameParent: string;
+  };
+}
+
+export interface Candidat {
+  id: number;
+  userId: number;
+  emailParent: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RegisterCandidatResponse {
+  candidat: Candidat;
+  user: AuthUser;
+}
+
 export interface LoginResponse {
   user: AuthUser;
   association: AuthAssociation | null;
@@ -150,6 +184,26 @@ export const AuthApi = {
   },
 
   /**
+   * Inscription d'un candidat
+   */
+  async registerCandidat(data: RegisterCandidatData): Promise<ApiResponse<RegisterCandidatResponse>> {
+    const url = `${API_CONFIG.BASE_URL}/auth/registerCandidat`;
+    console.log('🌐 API Call URL:', url);
+    console.log('📦 Request body:', JSON.stringify(data, null, 2));
+
+    const response = await fetchWithTimeout(url, {
+      method: 'POST',
+      headers: API_CONFIG.DEFAULT_HEADERS,
+      body: JSON.stringify(data),
+    });
+
+    console.log('📡 Response status:', response.status);
+    console.log('📡 Response headers:', response.headers);
+
+    return handleApiResponse<RegisterCandidatResponse>(response);
+  },
+
+  /**
    * Connexion
    */
   async login(loginData: LoginData): Promise<ApiResponse<LoginResponse>> {
@@ -178,6 +232,14 @@ export const AuthApi = {
    */
   async logout(refreshToken: string): Promise<ApiResponse<void>> {
     const data = await api.post<void>(UrlApi.authApi.logout, { refreshToken });
+    return { success: true, data };
+  },
+
+  /**
+   * Déconnexion de tous les appareils
+   */
+  async logoutAll(): Promise<ApiResponse<void>> {
+    const data = await api.post<void>(UrlApi.authApi.logoutAll);
     return { success: true, data };
   },
 };

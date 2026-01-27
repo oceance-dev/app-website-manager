@@ -107,7 +107,7 @@ export default class extends BaseSeeder {
         validityDays: 365,
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
         maxFileSize: 5 * 1024 * 1024,
-        requiredFor: 'candidats',
+        requiredFor: 'candidates',
         sortOrder: 20,
       },
       {
@@ -153,7 +153,7 @@ export default class extends BaseSeeder {
         validityDays: 90,
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
         maxFileSize: 5 * 1024 * 1024,
-        requiredFor: 'candidats',
+        requiredFor: 'candidates',
         sortOrder: 40,
       },
       {
@@ -166,7 +166,7 @@ export default class extends BaseSeeder {
         hasExpiration: false,
         allowedExtensions: ['jpg', 'jpeg', 'png'],
         maxFileSize: 2 * 1024 * 1024, // 2 MB
-        requiredFor: 'candidats',
+        requiredFor: 'candidates',
         sortOrder: 41,
       },
 

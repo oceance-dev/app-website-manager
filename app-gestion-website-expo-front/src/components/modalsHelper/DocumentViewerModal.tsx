@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { X, Download } from 'lucide-react-native';
 import { isMobile, getFontSize, getSpacing, getResponsivePadding, MIN_TOUCH_TARGET, getModalWidth, getModalHeight } from '../../utils/responsive';
+import ImageViewer from 'react-simple-image-viewer';
 
 interface DocumentViewerModalProps {
   visible: boolean;
@@ -17,6 +18,7 @@ interface DocumentViewerModalProps {
   documentUrl: string | null;
   documentName: string;
   mimeType?: string;
+  showDownload?: boolean;
 }
 
 export default function DocumentViewerModal({
@@ -25,11 +27,21 @@ export default function DocumentViewerModal({
   documentUrl,
   documentName,
   mimeType,
+  showDownload = true,
 }: DocumentViewerModalProps) {
   const [loading, setLoading] = React.useState(true);
+  const [isViewerOpen, setIsViewerOpen] = React.useState(false);
 
   const isPDF = mimeType?.includes('pdf') || documentName.toLowerCase().endsWith('.pdf');
   const isImage = mimeType?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(documentName);
+
+  // Fermer le viewer d'images quand on ferme la modal
+  React.useEffect(() => {
+    if (!visible) {
+      setIsViewerOpen(false);
+      setLoading(true);
+    }
+  }, [visible]);
 
   const handleLoad = () => {
     setLoading(false);
@@ -39,16 +51,69 @@ export default function DocumentViewerModal({
     setLoading(false);
   };
 
-  const handleDownload = () => {
-    if (!documentUrl) return;
+  const handleDownload = async () => {
+    if (!documentUrl) {
+      console.log('❌ No document URL for download');
+      return;
+    }
 
-    // Créer un lien temporaire pour télécharger le blob
-    const link = document.createElement('a');
-    link.href = documentUrl;
-    link.download = documentName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    console.log('💾 Starting download:', {
+      url: documentUrl,
+      name: documentName,
+      mimeType: mimeType,
+    });
+
+    try {
+      // Si c'est un blob URL, on doit le re-fetch pour créer un nouveau blob
+      if (documentUrl.startsWith('blob:')) {
+        console.log('📦 Fetching blob for download...');
+
+        const response = await fetch(documentUrl);
+        const blob = await response.blob();
+
+        console.log('📦 Blob fetched:', blob.type, blob.size);
+
+        // Créer un nouveau blob URL temporaire
+        const url = URL.createObjectURL(blob);
+
+        // Créer le lien de téléchargement
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = documentName || 'document';
+        link.style.display = 'none';
+
+        document.body.appendChild(link);
+        link.click();
+
+        console.log('✅ Download triggered');
+
+        // Nettoyer
+        setTimeout(() => {
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          console.log('🧹 Cleanup done');
+        }, 100);
+      } else {
+        // Pour les URLs normales
+        const link = document.createElement('a');
+        link.href = documentUrl;
+        link.download = documentName || 'document';
+        link.style.display = 'none';
+
+        document.body.appendChild(link);
+        link.click();
+
+        console.log('✅ Download triggered');
+
+        setTimeout(() => {
+          document.body.removeChild(link);
+          console.log('🧹 Cleanup done');
+        }, 100);
+      }
+    } catch (error) {
+      console.error('❌ Download error:', error);
+      alert('Erreur lors du téléchargement du document');
+    }
   };
 
   const renderContent = () => {
@@ -117,10 +182,13 @@ export default function DocumentViewerModal({
               maxWidth: '100%',
               maxHeight: '100%',
               objectFit: 'contain',
+              cursor: 'pointer',
             }}
+            onClick={() => setIsViewerOpen(true)}
             onLoad={handleLoad}
             onError={handleError}
           />
+          <Text style={styles.imageHint}>Cliquez sur l'image pour l'agrandir</Text>
         </View>
       );
     }
@@ -140,45 +208,63 @@ export default function DocumentViewerModal({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerContent}>
-              <Text style={styles.title} numberOfLines={1}>
-                {documentName}
-              </Text>
-              {mimeType && (
-                <Text style={styles.subtitle}>{mimeType}</Text>
-              )}
+    <>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="fade"
+        onRequestClose={onClose}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {/* Header */}
+            <View style={styles.header}>
+              <View style={styles.headerContent}>
+                <Text style={styles.title} numberOfLines={1}>
+                  {documentName}
+                </Text>
+                {mimeType && (
+                  <Text style={styles.subtitle}>{mimeType}</Text>
+                )}
+              </View>
+              <View style={styles.headerActions}>
+                {showDownload && (
+                  <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={handleDownload}
+                  >
+                    <Download color="#2563eb" size={24} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={onClose}
+                >
+                  <X color="#64748b" size={24} />
+                </TouchableOpacity>
+              </View>
             </View>
-            <View style={styles.headerActions}>
-              <TouchableOpacity
-                style={styles.iconButton}
-                onPress={handleDownload}
-              >
-                <Download color="#2563eb" size={24} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={onClose}
-              >
-                <X color="#64748b" size={24} />
-              </TouchableOpacity>
-            </View>
-          </View>
 
-          {/* Content */}
-          {renderContent()}
+            {/* Content */}
+            {renderContent()}
+          </View>
         </View>
-      </View>
-    </Modal>
+      </Modal>
+
+      {/* Image Viewer en plein écran */}
+      {isViewerOpen && documentUrl && isImage && (
+        <ImageViewer
+          src={[documentUrl]}
+          currentIndex={0}
+          disableScroll={false}
+          closeOnClickOutside={true}
+          onClose={() => setIsViewerOpen(false)}
+          backgroundStyle={{
+            backgroundColor: 'rgba(0, 0, 0, 0.95)',
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -276,6 +362,18 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: getFontSize(16),
     color: '#64748b',
+  },
+  imageHint: {
+    position: 'absolute',
+    bottom: 16,
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: getFontSize(14),
+    color: '#64748b',
+    backgroundColor: 'rgba(248, 250, 252, 0.9)',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
   },
   errorContainer: {
     flex: 1,

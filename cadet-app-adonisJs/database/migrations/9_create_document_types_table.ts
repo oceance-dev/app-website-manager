@@ -55,8 +55,9 @@ export default class extends BaseSchema {
         .enum('required_for', [
           'all', // Tous les membres
           'cadets', // Cadets uniquement
-          'candidats', // Candidats uniquement
+          'candidates', // Candidats uniquement
           'staff', // Staff uniquement
+          'minors', // Mineurs uniquement
         ])
         .nullable()
 

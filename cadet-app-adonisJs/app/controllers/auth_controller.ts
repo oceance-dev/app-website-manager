@@ -1,7 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 
 import AuthService from "#services/auth_service";
-import { loginValidator, refreshTokenValidator, registerAssociationValidator, registerAssociationMemberValidator } from '#validators/auth';
+import { loginValidator, refreshTokenValidator, registerAssociationValidator, registerAssociationMemberValidator, registerAssociationCandidatValidator } from '#validators/auth';
 
 export default class AuthController {
     private authService: AuthService // Faire appel au service auth
@@ -73,6 +73,42 @@ export default class AuthController {
             })
         } catch (error) {
             console.error('❌ Registration error:', error)
+            return response.badRequest({
+                success: false,
+                message: error.message || 'Erreur lors de l\'inscription',
+                errors: [{ message: error.message}],
+            })
+        }
+    }
+
+    /**
+     * POST /api/v1/auth/register/candidatAssociation
+     * Inscription d'un nouveau cadet pour une association
+     */
+
+    async registerCandidatAssociation({ request, response }: HttpContext) {
+        try {
+            const payload = await request.validateUsing(registerAssociationCandidatValidator)
+
+            const { user, candidat } = await this.authService.registerCandidatAssociationService(
+                payload,
+                {
+                    ipAddress: request.ip(),
+                    userAgent: request.header('user-agent'),
+                }
+            )
+
+            return response.created({
+                success: true,
+                message: 'Compte candidat enregistré avec succès',
+                data: {
+                    candidat: candidat.serialize(),
+                    user: user.serialize()
+                },
+            })
+
+        } catch (error) {
+            console.error(' Registration error:', error)
             return response.badRequest({
                 success: false,
                 message: error.message || 'Erreur lors de l\'inscription',

@@ -4,8 +4,11 @@ import User from '#models/user'
 import Association from '#models/association'
 import RefreshToken from '#models/refresh_token'
 import Role from '#models/role'
+import Folder from '#models/folder'
 import hash from '@adonisjs/core/services/hash'
 import { AssociationStatus } from '../../types/HelperPermAndRole.js'
+import Candidat from '#models/candidat'
+import { FolderService } from './folder_service.js'
 
 /**
  * ========================================
@@ -32,10 +35,30 @@ interface RegisterAssociationData {
     lastName: string
     phone: string
     city_code: string
-    dateOfBirth: DateTime
-    sexe: 'Homme' | 'Femme'
+    dateOfBirth?: DateTime
+    sexe?: 'Homme' | 'Femme'
   }
 }
+
+interface RegisterCandidatAssociationData {
+  candidat: {
+    firstname: string
+    lastname: string
+    email: string
+    password: string
+    dateOfBirth: DateTime
+    sexe: 'Homme' | 'Femme'
+    city_code: 'string'
+    roleId?: number
+  },
+  parent: {
+    emailParent: string
+    phoneParent?: string
+    firstNameParent?: string
+    lastNameParent?: string
+  }
+}
+
 
 interface LoginData {
   email: string
@@ -121,6 +144,11 @@ export default class AuthService {
   private static readonly REFRESH_TOKEN_EXPIRY_DAYS = 30
   private static readonly MAX_FAILED_ATTEMPTS = 5
   private static readonly LOCKOUT_DURATION_MINUTES = 15
+  private folderService: FolderService
+
+  constructor() {
+    this.folderService = new FolderService()
+  }
 
   /**
    * ========================================
@@ -162,12 +190,15 @@ export default class AuthService {
       lastname: data.responsable.lastName,
       phone: data.responsable.phone,
       city_code: data.responsable.city_code,
-      dateOfBirth: data.responsable.dateOfBirth,
-      sexe: data.responsable.sexe,
+      dateOfBirth: data.responsable.dateOfBirth || null,
+      sexe: data.responsable.sexe || null,
       isActive: false, // Activé après approbation
       failedLoginAttempts: 0,
       mustChangePassword: false,
     })
+
+    // Créer le dossier privé de l'utilisateur
+    await this.folderService.createPrivateFolder(user.associationId!, user.id)
 
     return { association, user }
   }
@@ -234,8 +265,61 @@ export default class AuthService {
       mustChangePassword: false,
     })
 
+      // Créer le dossier privé de l'utilisateur
+      await this.folderService.createPrivateFolder(user.associationId!, user.id)
+
     return { user }
   }
+
+  async registerCandidatAssociationService(data: RegisterCandidatAssociationData,
+    context?: { ipAddress: string, userAgent?: string }
+    ): Promise<{ user: User, candidat: Candidat }> {
+      const candidatRole = await Role.findBy('name', 'candidat')
+
+      if (!candidatRole) {
+        throw new Error('Configuration erreur: Rôle admin non trouvé. Exécutez le seeder des rôles.')
+      }
+
+      const association = await Association.findBy('postal_code', data.candidat.city_code)
+      //const association = await  Association.getAssociationByCityCode(data.candidat.city_code)
+
+      if (!association) {
+        throw new Error('Le code postal actuel ne permet de retrouvé une association')
+      }
+
+      const dateOfBirth = data.candidat.dateOfBirth instanceof Date
+      ? DateTime.fromJSDate(data.candidat.dateOfBirth)
+      : data.candidat.dateOfBirth
+
+      const user = await User.create({
+        associationId: association.id,
+        firstname: data.candidat.firstname,
+        lastname: data.candidat.lastname,
+        email: data.candidat.email,
+        password: data.candidat.password,
+        city_code: data.candidat.city_code,
+        phone: null, // Le téléphone du candidat n'est pas obligatoire
+        dateOfBirth: dateOfBirth,
+        sexe: data.candidat.sexe,
+        isActive: true,
+        roleId: candidatRole.id,
+        failedLoginAttempts: 0,
+        mustChangePassword: false,
+      })
+
+      const candidat = await Candidat.create({
+        user_id: user.id,
+        emailParent: data.parent.emailParent,
+        phoneParent: data.parent.phoneParent || null,
+        firstnameParent: data.parent.firstNameParent || null,
+        lastnameParent: data.parent.lastNameParent || null,
+      })
+
+      await this.folderService.createPrivateFolder(user.associationId!, user.id)
+      await this.folderService.createCandidatFolder(association.id, user.id)
+
+      return { user, candidat }
+    }
 
   /**
    * ========================================

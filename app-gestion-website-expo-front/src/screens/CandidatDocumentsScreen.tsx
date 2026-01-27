@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,92 +7,173 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Linking,
+  RefreshControl,
+  Modal,
 } from 'react-native';
-import { Upload, FileCheck, AlertCircle, CheckCircle2, X, Download, FileText } from 'lucide-react-native';
+import { Upload, FileCheck, AlertCircle, CheckCircle2, X, Download, FileText, Eye, RefreshCw } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { isWeb } from '../utils/responsive';
+import { CandidatsApi, API_CONFIG } from '../api';
+import { tokenStorage } from '../api/tokenStorage';
+import Toast, { ToastType } from '../components/ui/Toast';
+import DocumentViewerModal from '../components/modalsHelper/DocumentViewerModal';
+import { colors, textStyles, spacing, shadows, borderRadius } from '../theme';
+import { Card, Badge } from '../components/cadep';
 
 interface RequiredDocument {
-  id: string;
+  id: number;
   name: string;
-  description: string;
+  description?: string;
+  instructions?: string;
+  category?: string;
+  isRequired: boolean;
+  documentTypeId: number;
+  documentType?: {
+    id: number;
+    name: string;
+    description?: string;
+  };
+  templateDocument?: {
+    id: number;
+    name: string;
+    fileName: string;
+    fileUrl: string;
+    mimeType: string;
+  };
   uploaded: boolean;
   fileName?: string;
   uploadDate?: string;
   fileUri?: string;
+  fileId?: number;
 }
 
-interface DownloadableForm {
-  id: string;
+interface CustomDocument {
+  id: number;
   name: string;
-  description: string;
-  downloadUrl?: string;
-  uploaded: boolean;
-  fileName?: string;
-  uploadDate?: string;
-  fileUri?: string;
+  fileName: string;
+  createdAt: string;
+  fileSize?: number;
+  category: string;
 }
 
 export default function CandidatDocumentsScreen() {
   const [isUploading, setIsUploading] = useState(false);
-  const [requiredDocuments, setRequiredDocuments] = useState<RequiredDocument[]>([
-    {
-      id: 'id_card',
-      name: 'Pièce d\'identité',
-      description: 'Carte d\'identité ou passeport en cours de validité',
-      uploaded: false,
-    },
-    {
-      id: 'photo',
-      name: 'Photo d\'identité',
-      description: 'Photo récente au format JPEG ou PNG',
-      uploaded: false,
-    },
-    {
-      id: 'medical_certificate',
-      name: 'Certificat médical',
-      description: 'Certificat médical d\'aptitude de moins de 3 mois',
-      uploaded: false,
-    },
-  ]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [requiredDocuments, setRequiredDocuments] = useState<RequiredDocument[]>([]);
+  const [customDocuments, setCustomDocuments] = useState<CustomDocument[]>([]);
 
-  const [downloadableForms, setDownloadableForms] = useState<DownloadableForm[]>([
-    {
-      id: 'parental_authorization',
-      name: 'Autorisation parentale',
-      description: 'Téléchargez le formulaire, faites-le signer par vos parents, puis uploadez-le',
-      downloadUrl: '/forms/autorisation_parentale.pdf',
-      uploaded: false,
-    },
-    {
-      id: 'inscription_form',
-      name: 'Formulaire d\'inscription',
-      description: 'Formulaire d\'inscription à compléter et signer',
-      downloadUrl: '/forms/formulaire_inscription.pdf',
-      uploaded: false,
-    },
-    {
-      id: 'engagement_form',
-      name: 'Charte d\'engagement',
-      description: 'Charte d\'engagement à lire et signer',
-      downloadUrl: '/forms/charte_engagement.pdf',
-      uploaded: false,
-    },
-    {
-      id: 'health_form',
-      name: 'Fiche sanitaire',
-      description: 'Fiche sanitaire de liaison à compléter',
-      downloadUrl: '/forms/fiche_sanitaire.pdf',
-      uploaded: false,
-    },
-  ]);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<ToastType>('success');
 
-  const handleUploadDocument = async (documentId: string) => {
+  const [showDocumentViewerModal, setShowDocumentViewerModal] = useState(false);
+  const [viewerDocumentUrl, setViewerDocumentUrl] = useState<string | null>(null);
+  const [viewerDocumentName, setViewerDocumentName] = useState('');
+  const [viewerDocumentMimeType, setViewerDocumentMimeType] = useState('');
+
+  const [showAddCustomDocModal, setShowAddCustomDocModal] = useState(false);
+
+  const showSuccessToast = (message: string) => {
+    setToastMessage(message);
+    setToastType('success');
+    setShowToast(true);
+  };
+
+  const showErrorToast = (message: string) => {
+    setToastMessage(message);
+    setToastType('error');
+    setShowToast(true);
+  };
+
+  const fetchRequirements = async () => {
+    try {
+      const requirementsResponse = await CandidatsApi.getDocumentRequirements();
+      const myDocsResponse = await CandidatsApi.getMyDocuments();
+
+      if (requirementsResponse.success && requirementsResponse.data && myDocsResponse.success && myDocsResponse.data) {
+        const requirements = requirementsResponse.data.requirements;
+        const myDocs = myDocsResponse.data.documents;
+
+        const docsWithRequirement: any[] = [];
+        const docsWithoutRequirement: any[] = [];
+
+        myDocs.forEach((doc: any) => {
+          const reqId = doc.documentRequirementId || doc.document_requirement_id;
+          if (reqId) {
+            docsWithRequirement.push(doc);
+          } else {
+            docsWithoutRequirement.push(doc);
+          }
+        });
+
+        const merged = requirements.map((req: any) => {
+            const uploadedDoc = docsWithRequirement.find((doc: any) => {
+              const reqIdCamel = doc.documentRequirementId;
+              const reqIdSnake = doc.document_requirement_id;
+              return reqIdCamel === req.id || reqIdSnake === req.id;
+            });
+
+            return {
+              id: req.id,
+              name: req.name || 'Document',
+              description: req.description || '',
+              instructions: req.instructions || req.description,
+              category: req.category || '',
+              isRequired: req.isRequired === 1 || req.isRequired === true,
+              documentTypeId: req.documentTypeId,
+              documentType: req.documentType,
+              templateDocument: req.templateDocument,
+              uploaded: !!uploadedDoc,
+              fileName: uploadedDoc?.originalName || uploadedDoc?.fileName || null,
+              uploadDate: uploadedDoc?.createdAt || null,
+              fileUri: uploadedDoc?.filePath || null,
+              fileId: uploadedDoc?.id || null,
+            };
+          });
+
+        setRequiredDocuments(merged);
+
+        const customDocs = docsWithoutRequirement.map((doc: any) => ({
+          id: doc.id,
+          name: doc.name,
+          fileName: doc.originalName || doc.fileName,
+          createdAt: doc.createdAt,
+          fileSize: doc.fileSize,
+          category: doc.category || 'other',
+        }));
+
+        setCustomDocuments(customDocs);
+      }
+    } catch (error) {
+      console.error('Error fetching requirements:', error);
+      showErrorToast('Erreur lors du chargement des documents requis');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchRequirements();
+    setRefreshing(false);
+  };
+
+  useEffect(() => {
+    fetchRequirements();
+  }, []);
+
+  const handleUploadDocument = async (documentId: number) => {
     try {
       setIsUploading(true);
 
-      // Sélectionner le document
+      const requirement = requiredDocuments.find(doc => doc.id === documentId);
+      if (!requirement) {
+        showErrorToast('Document requirement introuvable');
+        setIsUploading(false);
+        return;
+      }
+
       const result = await DocumentPicker.getDocumentAsync({
         type: ['application/pdf', 'image/*'],
         copyToCacheDirectory: true,
@@ -104,146 +185,61 @@ export default function CandidatDocumentsScreen() {
       }
 
       const file = result.assets[0];
+      const formData = new FormData();
 
-      // TODO: Implémenter l'upload vers le backend
-      // await uploadDocumentToAPI(documentId, file);
+      if (isWeb) {
+        const response = await fetch(file.uri);
+        const blob = await response.blob();
+        formData.append('file', blob, file.name);
+      } else {
+        formData.append('file', {
+          uri: file.uri,
+          type: file.mimeType || 'application/octet-stream',
+          name: file.name,
+        } as any);
+      }
 
-      // Simuler un upload réussi
-      setTimeout(() => {
-        setRequiredDocuments(
-          requiredDocuments.map((doc) =>
-            doc.id === documentId
-              ? {
-                  ...doc,
-                  uploaded: true,
-                  fileName: file.name,
-                  uploadDate: new Date().toISOString(),
-                  fileUri: file.uri,
-                }
-              : doc
-          )
-        );
+      formData.append('documentRequirementId', documentId.toString());
 
-        setIsUploading(false);
+      if (requirement.category) {
+        formData.append('category', requirement.category);
+      }
 
-        if (isWeb) {
-          alert(`Document "${file.name}" uploadé avec succès`);
-        } else {
-          Alert.alert('Succès', `Document "${file.name}" uploadé avec succès`);
-        }
-      }, 1000);
+      const uploadResponse = await CandidatsApi.uploadDocument(formData);
+
+      if (uploadResponse.success) {
+        showSuccessToast(`Document "${file.name}" uploadé avec succès`);
+        await fetchRequirements();
+      } else {
+        showErrorToast('Erreur lors de l\'upload du document');
+      }
     } catch (error) {
       console.error('Error uploading document:', error);
+      showErrorToast('Erreur lors de l\'upload du document');
+    } finally {
       setIsUploading(false);
-
-      if (isWeb) {
-        alert('Erreur lors de l\'upload du document');
-      } else {
-        Alert.alert('Erreur', 'Erreur lors de l\'upload du document');
-      }
     }
   };
 
-  const handleUploadForm = async (formId: string) => {
-    try {
-      setIsUploading(true);
-
-      // Sélectionner le formulaire complété
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'image/*'],
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled) {
-        setIsUploading(false);
-        return;
-      }
-
-      const file = result.assets[0];
-
-      // TODO: Implémenter l'upload vers le backend
-      // await uploadFormToAPI(formId, file);
-
-      // Simuler un upload réussi
-      setTimeout(() => {
-        setDownloadableForms(
-          downloadableForms.map((form) =>
-            form.id === formId
-              ? {
-                  ...form,
-                  uploaded: true,
-                  fileName: file.name,
-                  uploadDate: new Date().toISOString(),
-                  fileUri: file.uri,
-                }
-              : form
-          )
-        );
-
-        setIsUploading(false);
-
-        if (isWeb) {
-          alert(`Formulaire "${file.name}" uploadé avec succès`);
+  const handleDeleteDocument = async (fileId: number) => {
+    const confirmDelete = async () => {
+      try {
+        const response = await CandidatsApi.deleteDocument(fileId);
+        if (response.success) {
+          showSuccessToast('Document supprimé avec succès');
+          await fetchRequirements();
         } else {
-          Alert.alert('Succès', `Formulaire "${file.name}" uploadé avec succès`);
+          showErrorToast('Erreur lors de la suppression du document');
         }
-      }, 1000);
-    } catch (error) {
-      console.error('Error uploading form:', error);
-      setIsUploading(false);
-
-      if (isWeb) {
-        alert('Erreur lors de l\'upload du formulaire');
-      } else {
-        Alert.alert('Erreur', 'Erreur lors de l\'upload du formulaire');
-      }
-    }
-  };
-
-  const handleDownloadForm = (form: DownloadableForm) => {
-    // TODO: Implémenter le téléchargement réel
-    if (isWeb) {
-      alert(`Téléchargement de ${form.name}...\nCe formulaire sera bientôt disponible.`);
-    } else {
-      Alert.alert(
-        'Téléchargement',
-        `${form.name}\nCe formulaire sera bientôt disponible.`
-      );
-    }
-
-    // Pour le moment, on simule
-    // Dans une vraie app, vous feriez :
-    // if (form.downloadUrl) {
-    //   Linking.openURL(form.downloadUrl);
-    // }
-  };
-
-  const handleDeleteDocument = (documentId: string) => {
-    const confirmDelete = () => {
-      setRequiredDocuments(
-        requiredDocuments.map((doc) =>
-          doc.id === documentId
-            ? {
-                ...doc,
-                uploaded: false,
-                fileName: undefined,
-                uploadDate: undefined,
-                fileUri: undefined,
-              }
-            : doc
-        )
-      );
-
-      if (isWeb) {
-        alert('Document supprimé');
-      } else {
-        Alert.alert('Succès', 'Document supprimé');
+      } catch (error) {
+        console.error('Error deleting document:', error);
+        showErrorToast('Erreur lors de la suppression du document');
       }
     };
 
     if (isWeb) {
       if (confirm('Êtes-vous sûr de vouloir supprimer ce document ?')) {
-        confirmDelete();
+        await confirmDelete();
       }
     } else {
       Alert.alert(
@@ -257,529 +253,676 @@ export default function CandidatDocumentsScreen() {
     }
   };
 
-  const handleDeleteForm = (formId: string) => {
-    const confirmDelete = () => {
-      setDownloadableForms(
-        downloadableForms.map((form) =>
-          form.id === formId
-            ? {
-                ...form,
-                uploaded: false,
-                fileName: undefined,
-                uploadDate: undefined,
-                fileUri: undefined,
-              }
-            : form
-        )
-      );
+  const handleDownloadDocument = async (fileId: number, fileName: string) => {
+    try {
+      const response = await CandidatsApi.downloadDocument(fileId);
+      if (response.success && response.data) {
+        if (isWeb) {
+          const blob = response.data;
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          showSuccessToast('Document téléchargé');
+        } else {
+          showSuccessToast('Téléchargement en cours...');
+        }
+      } else {
+        showErrorToast('Erreur lors du téléchargement');
+      }
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      showErrorToast('Erreur lors du téléchargement du document');
+    }
+  };
+
+  const handleViewDocument = async (fileId: number, fileName: string) => {
+    try {
+      const token = await tokenStorage.getAccessToken();
+      if (!token) {
+        showErrorToast('Session expirée. Veuillez vous reconnecter.');
+        return;
+      }
+
+      const downloadUrl = `${API_CONFIG.BASE_URL}/candidats/download-my-document/${fileId}`;
+      const fileResponse = await fetch(downloadUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!fileResponse.ok) {
+        if (fileResponse.status === 401) {
+          showErrorToast('Session expirée. Veuillez vous reconnecter.');
+          return;
+        }
+        throw new Error(`Erreur HTTP: ${fileResponse.status}`);
+      }
+
+      const contentType = fileResponse.headers.get('content-type') || 'application/octet-stream';
+      const arrayBuffer = await fileResponse.arrayBuffer();
+      const blob = new Blob([arrayBuffer], { type: contentType });
+      const blobUrl = URL.createObjectURL(blob);
+
+      setViewerDocumentUrl(blobUrl);
+      setViewerDocumentName(fileName || 'Document');
+      setViewerDocumentMimeType(contentType);
+      setShowDocumentViewerModal(true);
+    } catch (error: any) {
+      showErrorToast(error?.message || 'Impossible d\'ouvrir le document');
+    }
+  };
+
+  const handleDownloadTemplateDocument = async (templateDocumentId: number, fileName: string) => {
+    try {
+      const token = await tokenStorage.getAccessToken();
+      if (!token) {
+        showErrorToast('Session expirée. Veuillez vous reconnecter.');
+        return;
+      }
+
+      const downloadUrl = `${API_CONFIG.BASE_URL}/documents/users/download/${templateDocumentId}`;
+      const fileResponse = await fetch(downloadUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!fileResponse.ok) {
+        if (fileResponse.status === 401) {
+          showErrorToast('Session expirée. Veuillez vous reconnecter.');
+          return;
+        }
+        throw new Error(`Erreur HTTP: ${fileResponse.status}`);
+      }
+
+      const contentType = fileResponse.headers.get('content-type') || 'application/octet-stream';
+      const arrayBuffer = await fileResponse.arrayBuffer();
+      const blob = new Blob([arrayBuffer], { type: contentType });
 
       if (isWeb) {
-        alert('Formulaire supprimé');
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        showSuccessToast('Formulaire téléchargé avec succès');
       } else {
-        Alert.alert('Succès', 'Formulaire supprimé');
+        showSuccessToast('Téléchargement en cours...');
       }
-    };
+    } catch (error: any) {
+      showErrorToast(error?.message || 'Erreur lors du téléchargement');
+    }
+  };
 
-    if (isWeb) {
-      if (confirm('Êtes-vous sûr de vouloir supprimer ce formulaire ?')) {
-        confirmDelete();
+  const handleUploadCustomDocument = async () => {
+    try {
+      setIsUploading(true);
+
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/*'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) {
+        setIsUploading(false);
+        return;
       }
-    } else {
-      Alert.alert(
-        'Confirmation',
-        'Êtes-vous sûr de vouloir supprimer ce formulaire ?',
-        [
-          { text: 'Annuler', style: 'cancel' },
-          { text: 'Supprimer', style: 'destructive', onPress: confirmDelete },
-        ]
-      );
+
+      const file = result.assets[0];
+      const formData = new FormData();
+
+      if (isWeb) {
+        const response = await fetch(file.uri);
+        const blob = await response.blob();
+        formData.append('file', blob, file.name);
+      } else {
+        formData.append('file', {
+          uri: file.uri,
+          type: file.mimeType || 'application/octet-stream',
+          name: file.name,
+        } as any);
+      }
+
+      formData.append('category', 'other');
+      formData.append('name', file.name);
+
+      const uploadResponse = await CandidatsApi.uploadDocument(formData);
+
+      if (uploadResponse.success) {
+        showSuccessToast(`Document "${file.name}" ajouté avec succès`);
+        setShowAddCustomDocModal(false);
+        await fetchRequirements();
+      } else {
+        showErrorToast('Erreur lors de l\'ajout du document');
+      }
+    } catch (error) {
+      console.error('Error uploading custom document:', error);
+      showErrorToast('Erreur lors de l\'ajout du document');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleReplaceDocument = async (requirementId: number, fileId: number) => {
+    try {
+      setIsUploading(true);
+
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        setIsUploading(false);
+        return;
+      }
+
+      const file = result.assets[0];
+      const formData = new FormData();
+      formData.append('file', file as any);
+
+      const response = await CandidatsApi.replaceDocument(fileId, formData);
+
+      if (response.success) {
+        showSuccessToast(`Document "${file.name}" remplacé avec succès`);
+        await fetchRequirements();
+      } else {
+        showErrorToast('Erreur lors du remplacement du document');
+      }
+    } catch (error) {
+      console.error('Error replacing document:', error);
+      showErrorToast('Erreur lors du remplacement du document');
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const uploadedDocsCount = requiredDocuments.filter((doc) => doc.uploaded).length;
   const totalDocsCount = requiredDocuments.length;
-  const uploadedFormsCount = downloadableForms.filter((form) => form.uploaded).length;
-  const totalFormsCount = downloadableForms.length;
-  const totalUploadedCount = uploadedDocsCount + uploadedFormsCount;
-  const totalCount = totalDocsCount + totalFormsCount;
-  const allUploaded = totalUploadedCount === totalCount;
-  const progress = (totalUploadedCount / totalCount) * 100;
+  const allUploaded = uploadedDocsCount === totalDocsCount && totalDocsCount > 0;
+  const progress = totalDocsCount > 0 ? (uploadedDocsCount / totalDocsCount) * 100 : 0;
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color={colors.navy} />
+        <Text style={styles.loadingText}>Chargement...</Text>
+      </View>
+    );
+  }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      <View style={styles.card}>
-        <View style={styles.content}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.title}>Documents requis</Text>
-              <Text style={styles.subtitle}>
-                Téléchargez les documents et formulaires nécessaires pour valider votre inscription
-              </Text>
-            </View>
-          </View>
+    <View style={styles.container}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Documents requis</Text>
+          <Text style={styles.subtitle}>
+            Téléchargez les documents et formulaires nécessaires pour valider votre inscription
+          </Text>
+        </View>
 
-          {/* Progress Bar */}
-          <View style={styles.progressSection}>
-            <View style={styles.progressHeader}>
-              <Text style={styles.progressTitle}>Progression</Text>
-              <Text style={styles.progressText}>
-                {totalUploadedCount} / {totalCount} documents
-              </Text>
-            </View>
-            <View style={styles.progressBarContainer}>
-              <View style={[styles.progressBar, { width: `${progress}%` }]} />
-            </View>
-            {allUploaded && (
-              <View style={styles.successMessage}>
-                <CheckCircle2 color="#10b981" size={20} />
-                <Text style={styles.successMessageText}>
-                  Tous les documents ont été téléchargés ! Votre demande sera examinée prochainement.
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Information */}
-          <View style={styles.infoSection}>
-            <AlertCircle color="#2563eb" size={20} />
-            <Text style={styles.infoText}>
-              Assurez-vous que vos documents sont lisibles et à jour. Les formats acceptés sont PDF, JPEG et PNG.
-            </Text>
-          </View>
-
-          {/* Documents à fournir */}
-          <View style={styles.sectionHeader}>
-            <FileCheck color="#1e293b" size={24} />
-            <Text style={styles.sectionTitle}>Documents à fournir</Text>
-          </View>
-          <View style={styles.documentsList}>
-            {requiredDocuments.map((doc) => (
-              <View key={doc.id} style={styles.documentCard}>
-                <View style={styles.documentHeader}>
-                  <View style={styles.documentIconContainer}>
-                    {doc.uploaded ? (
-                      <FileCheck color="#10b981" size={24} />
-                    ) : (
-                      <Upload color="#64748b" size={24} />
-                    )}
-                  </View>
-                  <View style={styles.documentInfo}>
-                    <Text style={styles.documentName}>{doc.name}</Text>
-                    <Text style={styles.documentDescription}>{doc.description}</Text>
-                    {doc.uploaded && doc.fileName && (
-                      <View style={styles.uploadedInfo}>
-                        <Text style={styles.uploadedFileName}>{doc.fileName}</Text>
-                        <Text style={styles.uploadedDate}>
-                          {new Date(doc.uploadDate!).toLocaleDateString('fr-FR')}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-
-                <View style={styles.documentActions}>
-                  {doc.uploaded ? (
-                    <>
-                      <View style={styles.statusBadge}>
-                        <CheckCircle2 color="#10b981" size={16} />
-                        <Text style={styles.statusBadgeText}>Envoyé</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.deleteButton}
-                        onPress={() => handleDeleteDocument(doc.id)}
-                        disabled={isUploading}
-                      >
-                        <X color="#ef4444" size={20} />
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <TouchableOpacity
-                      style={styles.uploadButton}
-                      onPress={() => handleUploadDocument(doc.id)}
-                      disabled={isUploading}
-                    >
-                      {isUploading ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <>
-                          <Upload color="#fff" size={18} />
-                          <Text style={styles.uploadButtonText}>Télécharger</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            ))}
-          </View>
-
-          {/* Formulaires à compléter */}
-          <View style={[styles.sectionHeader, { marginTop: 32 }]}>
-            <FileText color="#1e293b" size={24} />
-            <Text style={styles.sectionTitle}>Formulaires à compléter</Text>
-          </View>
-          <View style={styles.formsHelpSection}>
-            <Text style={styles.formsHelpText}>
-              📥 Téléchargez chaque formulaire, complétez-le, puis uploadez-le une fois rempli et signé.
-            </Text>
-          </View>
-          <View style={styles.documentsList}>
-            {downloadableForms.map((form) => (
-              <View key={form.id} style={styles.documentCard}>
-                <View style={styles.documentHeader}>
-                  <View style={styles.documentIconContainer}>
-                    {form.uploaded ? (
-                      <FileCheck color="#10b981" size={24} />
-                    ) : (
-                      <FileText color="#64748b" size={24} />
-                    )}
-                  </View>
-                  <View style={styles.documentInfo}>
-                    <Text style={styles.documentName}>{form.name}</Text>
-                    <Text style={styles.documentDescription}>{form.description}</Text>
-                    {form.uploaded && form.fileName && (
-                      <View style={styles.uploadedInfo}>
-                        <Text style={styles.uploadedFileName}>{form.fileName}</Text>
-                        <Text style={styles.uploadedDate}>
-                          {new Date(form.uploadDate!).toLocaleDateString('fr-FR')}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-
-                <View style={styles.documentActions}>
-                  {!form.uploaded && (
-                    <TouchableOpacity
-                      style={styles.downloadFormButton}
-                      onPress={() => handleDownloadForm(form)}
-                    >
-                      <Download color="#2563eb" size={18} />
-                      <Text style={styles.downloadFormButtonText}>Télécharger</Text>
-                    </TouchableOpacity>
-                  )}
-                  {form.uploaded ? (
-                    <>
-                      <View style={styles.statusBadge}>
-                        <CheckCircle2 color="#10b981" size={16} />
-                        <Text style={styles.statusBadgeText}>Envoyé</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.deleteButton}
-                        onPress={() => handleDeleteForm(form.id)}
-                        disabled={isUploading}
-                      >
-                        <X color="#ef4444" size={20} />
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <TouchableOpacity
-                      style={styles.uploadButton}
-                      onPress={() => handleUploadForm(form.id)}
-                      disabled={isUploading}
-                    >
-                      {isUploading ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <>
-                          <Upload color="#fff" size={18} />
-                          <Text style={styles.uploadButtonText}>Envoyer</Text>
-                        </>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                </View>
-              </View>
-            ))}
-          </View>
-
-          {/* Help Section */}
-          <View style={styles.helpSection}>
-            <Text style={styles.helpTitle}>Besoin d'aide ?</Text>
-            <Text style={styles.helpText}>
-              Si vous rencontrez des difficultés pour télécharger vos documents, contactez-nous à{' '}
-              <Text style={styles.helpEmail}>contact@cadet-somme.fr</Text>
+        {/* Progression */}
+        <View style={styles.progressSection}>
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressLabel}>Progression</Text>
+            <Text style={styles.progressCount}>
+              {uploadedDocsCount} / {totalDocsCount} documents
             </Text>
           </View>
         </View>
-      </View>
-    </ScrollView>
+
+        {/* Info */}
+        <View style={styles.infoBox}>
+          <AlertCircle color={colors.info} size={20} />
+          <Text style={styles.infoText}>
+            Assurez-vous que vos documents sont lisibles et à jour. Les formats acceptés sont PDF, JPEG et PNG.
+          </Text>
+        </View>
+
+        {/* Documents à fournir */}
+        <Text style={styles.sectionTitle}>Documents à fournir</Text>
+        <View style={styles.documentsList}>
+          {requiredDocuments.map((doc) => (
+            <View key={doc.id} style={styles.documentItem}>
+              {/* Icône gauche */}
+              <View style={styles.uploadIconContainer}>
+                {doc.uploaded ? (
+                  <CheckCircle2 color={colors.success} size={24} />
+                ) : (
+                  <Upload color={colors.gray[400]} size={24} />
+                )}
+              </View>
+
+              {/* Contenu central */}
+              <View style={styles.documentMainContent}>
+                <Text style={styles.documentTitle}>{doc.name}</Text>
+                {doc.description && (
+                  <Text style={styles.documentDesc}>{doc.description}</Text>
+                )}
+                {doc.instructions && doc.instructions !== doc.description && (
+                  <Text style={styles.documentDesc}>{doc.instructions}</Text>
+                )}
+              </View>
+
+              {/* Boutons à droite */}
+              <View style={styles.documentActionsContainer}>
+                {/* Bouton télécharger le formulaire (si template disponible) */}
+                {!doc.uploaded && doc.templateDocument && (
+                  <TouchableOpacity
+                    style={styles.downloadTemplateButton}
+                    onPress={() => handleDownloadTemplateDocument(doc.templateDocument!.id, doc.templateDocument!.fileName)}
+                    disabled={isUploading}
+                  >
+                    <Download color={colors.navy} size={18} />
+                    <Text style={styles.downloadTemplateButtonText}>Télécharger</Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Bouton principal (Transmettre ou Envoyé) */}
+                <TouchableOpacity
+                  style={[
+                    styles.uploadActionButton,
+                    doc.uploaded && styles.uploadActionButtonSuccess
+                  ]}
+                  onPress={() => doc.uploaded ? handleViewDocument(doc.fileId!, doc.fileName!) : handleUploadDocument(doc.id)}
+                  disabled={isUploading}
+                >
+                  {isUploading ? (
+                    <ActivityIndicator color={colors.white} size="small" />
+                  ) : (
+                    <>
+                      {doc.uploaded ? (
+                        <>
+                          <CheckCircle2 color={colors.white} size={18} />
+                          <Text style={styles.uploadActionButtonText}>Envoyé</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Upload color={colors.white} size={18} />
+                          <Text style={styles.uploadActionButtonText}>Transmettre</Text>
+                        </>
+                      )}
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Documents personnalisés */}
+        <View style={styles.customSection}>
+          <Text style={styles.sectionTitle}>Autres documents</Text>
+          <Text style={styles.sectionSubtitle}>
+            Ajoutez des documents complémentaires si nécessaire
+          </Text>
+
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setShowAddCustomDocModal(true)}
+            disabled={isUploading}
+          >
+            <Upload color={colors.navy} size={20} />
+            <Text style={styles.addButtonText}>Ajouter un document</Text>
+          </TouchableOpacity>
+
+          {customDocuments.length > 0 && (
+            <View style={styles.documentsList}>
+              {customDocuments.map((doc) => (
+                <Card key={doc.id} style={styles.documentCard}>
+                  <View style={styles.documentRow}>
+                    <View style={styles.documentContent}>
+                      <View style={[styles.documentIcon, { backgroundColor: colors.successLight }]}>
+                        <FileCheck color={colors.success} size={24} />
+                      </View>
+                      <View style={styles.documentInfo}>
+                        <Text style={styles.documentName}>{doc.name}</Text>
+                        <Text style={styles.documentDate}>
+                          {new Date(doc.createdAt).toLocaleDateString('fr-FR')}
+                        </Text>
+                        <Badge text="Envoyé" variant="active" style={styles.badge} />
+                      </View>
+                    </View>
+                    <View style={styles.actionsColumn}>
+                      <TouchableOpacity
+                        style={styles.iconButtonSmall}
+                        onPress={() => handleViewDocument(doc.id, doc.fileName)}
+                      >
+                        <Eye color={colors.info} size={16} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.iconButtonSmall}
+                        onPress={() => handleDownloadDocument(doc.id, doc.fileName)}
+                      >
+                        <Download color={colors.success} size={16} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.iconButtonSmall, styles.deleteButton]}
+                        onPress={() => handleDeleteDocument(doc.id)}
+                      >
+                        <X color={colors.error} size={16} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </Card>
+              ))}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Modal de visualisation */}
+      <DocumentViewerModal
+        visible={showDocumentViewerModal}
+        onClose={() => {
+          if (viewerDocumentUrl && viewerDocumentUrl.startsWith('blob:')) {
+            URL.revokeObjectURL(viewerDocumentUrl);
+          }
+          setShowDocumentViewerModal(false);
+          setViewerDocumentUrl(null);
+          setViewerDocumentName('');
+          setViewerDocumentMimeType('');
+        }}
+        documentUrl={viewerDocumentUrl}
+        documentName={viewerDocumentName}
+        mimeType={viewerDocumentMimeType}
+        showDownload={true}
+      />
+
+      {/* Modal d'ajout de document */}
+      <Modal
+        visible={showAddCustomDocModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddCustomDocModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Ajouter un document</Text>
+              <TouchableOpacity onPress={() => setShowAddCustomDocModal(false)}>
+                <X color={colors.gray[600]} size={24} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalDescription}>
+                Ajoutez un document complémentaire à votre dossier (PDF, JPEG, PNG)
+              </Text>
+              <TouchableOpacity
+                style={styles.modalUploadButton}
+                onPress={handleUploadCustomDocument}
+                disabled={isUploading}
+              >
+                {isUploading ? (
+                  <ActivityIndicator color={colors.white} size="small" />
+                ) : (
+                  <>
+                    <Upload color={colors.white} size={20} />
+                    <Text style={styles.modalUploadButtonText}>Sélectionner un fichier</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Toast
+        visible={showToast}
+        message={toastMessage}
+        type={toastType}
+        onHide={() => setShowToast(false)}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    ...textStyles.body,
+    color: colors.gray[600],
+    marginTop: spacing[3],
+  },
+  scrollView: {
+    flex: 1,
   },
   scrollContent: {
-    padding: 16,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-    overflow: 'hidden',
-  },
-  content: {
-    padding: 20,
+    padding: spacing[4],
   },
   header: {
-    marginBottom: 24,
+    marginBottom: spacing[4],
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 4,
+    fontWeight: '700',
+    color: colors.foreground,
+    marginBottom: spacing[2],
   },
   subtitle: {
-    fontSize: 14,
-    color: '#64748b',
-    lineHeight: 20,
+    fontSize: 15,
+    color: colors.gray[600],
+    lineHeight: 22,
   },
   progressSection: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    paddingVertical: spacing[4],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[200],
+    marginBottom: spacing[4],
   },
   progressHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
   },
-  progressTitle: {
+  progressLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1e293b',
+    color: colors.foreground,
   },
-  progressText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#2563eb',
+  progressCount: {
+    fontSize: 16,
+    color: colors.gray[600],
   },
-  progressBarContainer: {
-    height: 8,
-    backgroundColor: '#e2e8f0',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#2563eb',
-    borderRadius: 4,
-  },
-  successMessage: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: '#d1fae5',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#a7f3d0',
-  },
-  successMessageText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#047857',
-    fontWeight: '500',
-  },
-  infoSection: {
+  infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
-    backgroundColor: '#eff6ff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 24,
+    gap: spacing[3],
+    padding: spacing[3],
+    backgroundColor: colors.infoLight,
+    borderRadius: borderRadius.md,
     borderWidth: 1,
-    borderColor: '#dbeafe',
+    borderColor: colors.info + '40',
+    marginBottom: spacing[5],
   },
   infoText: {
     flex: 1,
-    fontSize: 14,
-    color: '#1e40af',
-    lineHeight: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
+    ...textStyles.bodySmall,
+    color: colors.infoDark,
+    lineHeight: 18,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1e293b',
+    color: colors.foreground,
+    marginBottom: spacing[4],
+    marginTop: spacing[2],
   },
-  formsHelpSection: {
-    backgroundColor: '#fef3c7',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#fde68a',
-  },
-  formsHelpText: {
-    fontSize: 13,
-    color: '#92400e',
-    lineHeight: 18,
+  sectionSubtitle: {
+    ...textStyles.body,
+    color: colors.gray[600],
+    marginBottom: spacing[3],
   },
   documentsList: {
-    gap: 16,
+    gap: spacing[0],
   },
-  documentCard: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  documentHeader: {
+  documentItem: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    gap: 12,
+    alignItems: 'center',
+    gap: spacing[4],
+    paddingVertical: spacing[5],
+    paddingHorizontal: spacing[4],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[200],
+    backgroundColor: colors.white,
   },
-  documentIconContainer: {
+  uploadIconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 12,
-    backgroundColor: '#fff',
+    borderRadius: borderRadius.full,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.gray[300],
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    backgroundColor: colors.gray[50],
   },
-  documentInfo: {
+  documentMainContent: {
     flex: 1,
   },
-  documentName: {
+  documentTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 4,
+    color: colors.foreground,
+    marginBottom: spacing[1],
   },
-  documentDescription: {
-    fontSize: 13,
-    color: '#64748b',
-    lineHeight: 18,
-  },
-  uploadedInfo: {
-    marginTop: 8,
-    padding: 8,
-    backgroundColor: '#dcfce7',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#a7f3d0',
-  },
-  uploadedFileName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#047857',
-    marginBottom: 2,
-  },
-  uploadedDate: {
-    fontSize: 12,
-    color: '#059669',
-  },
-  documentActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#d1fae5',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#a7f3d0',
-  },
-  statusBadgeText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#047857',
-  },
-  uploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#2563eb',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-  },
-  uploadButtonText: {
+  documentDesc: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  downloadFormButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#eff6ff',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-  },
-  downloadFormButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#2563eb',
-  },
-  deleteButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#fee2e2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#fecaca',
-  },
-  helpSection: {
-    marginTop: 24,
-    padding: 16,
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  helpTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 8,
-  },
-  helpText: {
-    fontSize: 14,
-    color: '#64748b',
+    color: colors.gray[600],
     lineHeight: 20,
   },
-  helpEmail: {
-    color: '#2563eb',
+  documentActionsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+  },
+  downloadTemplateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[3],
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    borderWidth: 2,
+    borderColor: colors.navy,
+    minWidth: 120,
+    justifyContent: 'center',
+  },
+  downloadTemplateButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.navy,
+  },
+  uploadActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing[2],
+    paddingVertical: spacing[2],
+    paddingHorizontal: spacing[4],
+    backgroundColor: colors.navy,
+    borderRadius: borderRadius.lg,
+    minWidth: 140,
+    justifyContent: 'center',
+  },
+  uploadActionButtonSuccess: {
+    backgroundColor: colors.success,
+  },
+  uploadActionButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.white,
+  },
+  customSection: {
+    marginTop: spacing[4],
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    padding: spacing[3],
+    backgroundColor: colors.gray[100],
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.gray[300],
+    marginBottom: spacing[4],
+  },
+  addButtonText: {
+    ...textStyles.label,
+    color: colors.navy,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing[4],
+  },
+  modalContainer: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.lg,
+    width: '100%',
+    maxWidth: 500,
+    ...shadows.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing[4],
+    borderBottomWidth: 1,
+    borderBottomColor: colors.gray[200],
+  },
+  modalTitle: {
+    ...textStyles.h3,
+    color: colors.navy,
+  },
+  modalContent: {
+    padding: spacing[4],
+  },
+  modalDescription: {
+    ...textStyles.body,
+    color: colors.gray[600],
+    marginBottom: spacing[4],
+    lineHeight: 20,
+  },
+  modalUploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    padding: spacing[3],
+    backgroundColor: colors.navy,
+    borderRadius: borderRadius.md,
+    ...shadows.sm,
+  },
+  modalUploadButtonText: {
+    ...textStyles.label,
+    color: colors.white,
     fontWeight: '600',
   },
 });

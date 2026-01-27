@@ -25,6 +25,8 @@ export { AuthApi } from './auth.api';
 export { AssociationsApi } from './associations.api';
 export { UsersApi } from './users.api';
 export { RolesApi } from './roles.api';
+export { StaffAppApi } from './staffApp.api';
+export { DocumentRequirementsApi } from './document-requirements.api';
 
 // Export de la configuration et des utilitaires
 export { API_CONFIG, ApiError, getAuthHeaders, handleApiResponse } from './config';
@@ -58,6 +60,11 @@ export type {
   GetAllDocumentsResponse as DocumentsGetAllResponse,
   UploadDocumentData,
   DocumentWithDownloadUrl,
+  DocumentType as DocumentTypeModel,
+  CreateDocumentTypeData,
+  UpdateDocumentTypeData,
+  DocumentTypeCategory,
+  RequiredFor as DocumentRequiredFor,
 } from './documents.api';
 
 // Cadets
@@ -124,3 +131,26 @@ export type {
   UpdateFolderMemberData,
   MoveDocumentData,
 } from './folders.api';
+
+// StaffApp
+export type {
+  CreateRoleData,
+  UpdateRoleData,
+  UpdatePermissionsData,
+  UserWithRole,
+} from './staffApp.api';
+
+// Document Requirements
+export type {
+  DocumentType,
+  DocumentRequirement,
+  GetAllRequirementsResponse,
+  CreateRequirementData,
+  UpdateRequirementData,
+  UserDocumentCompletion,
+  CompletionCheckResponse,
+  RequiredFor,
+  RequiredAt,
+} from './document-requirements.api';
+
+export { RequiredForLabels, RequiredAtLabels } from './document-requirements.api';

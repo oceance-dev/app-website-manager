@@ -7,7 +7,7 @@ import type { DocumentCategory } from './document.js'
 /**
  * Pour qui le document est requis
  */
-export type RequiredFor = 'all' | 'cadets' | 'candidats' | 'staff'
+export type RequiredFor = 'all' | 'cadets' | 'candidates' | 'staff' | 'minors'
 
 export default class DocumentType extends BaseModel {
   @column({ isPrimary: true })
@@ -138,7 +138,7 @@ export default class DocumentType extends BaseModel {
         query.whereNull('associationId').orWhere('associationId', associationId)
       })
       .where('isActive', true)
-      .orderBy('sortOrder', 'asc')
+      .orderBy('sort_order', 'asc')
       .orderBy('name', 'asc')
   }
 
@@ -152,7 +152,7 @@ export default class DocumentType extends BaseModel {
       })
       .where('isActive', true)
       .where('isRequired', true)
-      .orderBy('sortOrder', 'asc')
+      .orderBy('sort_order', 'asc')
   }
 
   /**
@@ -171,7 +171,7 @@ export default class DocumentType extends BaseModel {
       .where((query) => {
         query.where('requiredFor', 'all').orWhere('requiredFor', requiredFor)
       })
-      .orderBy('sortOrder', 'asc')
+      .orderBy('sort_order', 'asc')
   }
 
   /**

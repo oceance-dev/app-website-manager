@@ -1,10 +1,18 @@
 export interface Folder {
     id: number;
     name: string;
+    slug?: string;
     parentId: number | null;
     createdBy: number;
     createdAt: string;
     permissions: FolderPermission[];
+    visibility?: 'private' | 'members' | 'staff' | 'public';
+    description?: string;
+    color?: string;
+    icon?: string;
+    allowUpload?: boolean;
+    allowDownload?: boolean;
+    allowDelete?: boolean;
 }
 
 export interface FolderPermission {

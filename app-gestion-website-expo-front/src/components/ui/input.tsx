@@ -1,5 +1,6 @@
 import * as React from "react";
 import { TextInput, View, Text, StyleSheet, Platform } from "react-native";
+import { colors, spacing, borderRadius } from '../../theme';
 
 export interface InputProps
   extends React.ComponentPropsWithoutRef<typeof TextInput> {
@@ -30,7 +31,7 @@ const Input = React.forwardRef<React.ElementRef<typeof TextInput>, InputProps>(
           <TextInput
             ref={ref}
             style={[styles.input, style]}
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={colors.mutedForeground}
             {...props}
           />
           {rightIcon && <View style={styles.rightIcon}>{rightIcon}</View>}
@@ -48,44 +49,41 @@ Input.displayName = "Input";
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    marginBottom: 16,
+    gap: spacing.sm,
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 8,
+    fontWeight: '500',
+    color: colors.foreground,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 48,
-    borderRadius: 8,
+    borderRadius: borderRadius.lg,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.lg,
   },
   inputWrapperError: {
-    borderColor: '#ef4444',
+    borderColor: colors.error,
   },
   input: {
     flex: 1,
-    fontSize: 16,
-    color: '#1e293b',
-    paddingVertical: 12,
+    fontSize: 14,
+    color: colors.foreground,
+    paddingVertical: spacing.md,
     ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
   } as any,
   leftIcon: {
-    marginRight: 8,
+    marginRight: spacing.sm,
   },
   rightIcon: {
-    marginLeft: 8,
+    marginLeft: spacing.sm,
   },
   error: {
     fontSize: 12,
-    color: '#ef4444',
-    marginTop: 4,
+    color: colors.error,
   },
 });
 

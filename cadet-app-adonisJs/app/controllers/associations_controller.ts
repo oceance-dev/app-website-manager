@@ -8,6 +8,7 @@ import { listUsersValidator } from '#validators/user'
 import Role from '#models/role'
 import Document from '#models/document'
 import Folder from '#models/document'
+import { FolderService } from '#services/folder_service'
 
 /**
  * /api/v1/association
@@ -15,6 +16,11 @@ import Folder from '#models/document'
  * Réservé au super_admin 
  */
 export default class AssociationsController {
+    private folderService: FolderService
+
+    constructor() {
+        this.folderService = new FolderService()
+    }
 
     /**
      * GET /staffApp/all-associations
@@ -111,9 +117,16 @@ export default class AssociationsController {
         association.subscriptionEndsAt = DateTime.now().plus({ months: subscriptionMonths})
         await association.save()
 
+        // Activer tous les utilisateurs de l'association
         await User.query()
             .where('associationId', association.id)
             .update({ isActive: true })
+
+        // Créer les dossiers privés pour tous les utilisateurs de l'association
+        const users = await User.query().where('associationId', association.id).whereNull('deletedAt')
+        for (const user of users) {
+            await this.folderService.createPrivateFolder(user.associationId!, user.id)
+        }
 
         return response.ok({
             success: true,
@@ -216,7 +229,13 @@ export default class AssociationsController {
             .where('associationId', association.id)
             .where('role', 'admin')
             .update({ isActive: true})
-        
+
+        // Créer les dossiers privés pour tous les utilisateurs de l'association
+        const users = await User.query().where('associationId', association.id).whereNull('deletedAt')
+        for (const user of users) {
+            await Folder.createPrivateFolder(user)
+        }
+
         return response.ok({
             success: true,
             message: 'Association réactivée',
@@ -545,6 +564,62 @@ export default class AssociationsController {
                     perPage: getAllMembersAssociation.perPage,
                     currentPage: getAllMembersAssociation.currentPage,
                     lastPage: getAllMembersAssociation.lastPage,
+                },
+            },
+        })
+    }
+
+    /**
+     * GET /admin/candidats
+     * Récupère l'ensemble des candidats en attente de l'association
+     */
+    async candidats({ auth, response, request }: HttpContext) {
+        const currentUser = auth.user!
+
+        const filters = await request.validateUsing(listUsersValidator)
+        const page = filters.page || 1
+        const limit = filters.limit || 20
+
+        if (!currentUser.associationId) {
+            return response.notFound({
+                success: false,
+                message: 'Vous n\'êtes rattaché à aucune association',
+            })
+        }
+
+        const query = User.query()
+            .where('associationId', currentUser.associationId)
+            .where('role_id', 11) // ID du rôle candidat
+            .whereNull('deletedAt')
+            .preload('role')
+
+        if (filters.search) {
+            query.where((q) => {
+                q.whereILike('firstname', `%${filters.search}%`)
+                    .orWhereILike('lastname', `%${filters.search}%`)
+                    .orWhereILike('email', `%${filters.search}%`)
+            })
+        }
+
+        if (filters.isActive !== undefined) {
+            query.where('isActive', filters.isActive)
+        }
+
+        const sortBy = filters.sortBy || 'createdAt'
+        const sortOrder = filters.sortOrder ||'desc'
+        query.orderBy(sortBy, sortOrder)
+
+        const getAllCandidatAssociation = await query.paginate(page, limit)
+
+        return response.ok({
+            success: true,
+            data: {
+                candidats: getAllCandidatAssociation.all().map((a) => a.serialize()),
+                meta: {
+                    total: getAllCandidatAssociation.total,
+                    perPage: getAllCandidatAssociation.perPage,
+                    currentPage: getAllCandidatAssociation.currentPage,
+                    lastPage: getAllCandidatAssociation.lastPage,
                 },
             },
         })

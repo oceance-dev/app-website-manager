@@ -2,31 +2,33 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
+  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   ScrollView,
-  StatusBar,
+  ActivityIndicator,
   StyleSheet,
 } from 'react-native';
-import { MapPin, Building2, Mail, Lock, User } from 'lucide-react-native';
+import { ArrowLeft, Building2 } from 'lucide-react-native';
 import { isWeb } from '../../utils/responsive';
-import { Button } from '../ui/button';
-import { Input } from '../ui/input';
 import { getDepartmentFromPostalCode, isValidPostalCode, Department } from '../../utils/department';
+import { AuthApi, ApiError } from '../../api';
+import { colors, spacing, borderRadius, shadows } from '../../theme';
 
 interface OrganizationSignupData {
   organizationName: string;
-  subdomain: string;
-  siren: string | null;
+  siret: string | null;
   rna: string | null;
+  address: string | null;
   postalCode: string;
   city: string;
-  address: string | null;
-  firstName: string;
-  lastName: string;
-  email: string;
+  country: string;
+  representativeName: string;
+  representativeEmail: string;
+  representativePhone: string;
   password: string;
+  confirmPassword: string;
 }
 
 interface OrganizationSignupScreenProps {
@@ -38,25 +40,25 @@ export default function OrganizationSignupScreen({
   onSignupSuccess,
   onNavigateToLogin
 }: OrganizationSignupScreenProps) {
-  const [step, setStep] = useState(1);
   const [formData, setFormData] = useState<OrganizationSignupData>({
     organizationName: '',
-    subdomain: '',
-    siren: null,
+    siret: null,
     rna: null,
+    address: null,
     postalCode: '',
     city: '',
-    address: null,
-    firstName: '',
-    lastName: '',
-    email: '',
+    country: 'France',
+    representativeName: '',
+    representativeEmail: '',
+    representativePhone: '',
     password: '',
+    confirmPassword: '',
   });
   const [loading, setLoading] = useState(false);
   const [departmentInfo, setDepartmentInfo] = useState<Department | null>(null);
+  const [errorMessage, setErrorMessage] = useState('');
   const [showSuccessCard, setShowSuccessCard] = useState(false);
 
-  // Gérer le changement de code postal et détecter le département
   const handlePostalCodeChange = (postalCode: string) => {
     setFormData({ ...formData, postalCode });
 
@@ -68,369 +70,444 @@ export default function OrganizationSignupScreen({
     }
   };
 
-  const validateStep1 = (): boolean => {
+  const validateForm = (): boolean => {
     if (!formData.organizationName.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer le nom de votre association');
-      return false;
-    }
-
-    if (!formData.subdomain.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer un sous-domaine');
-      return false;
-    }
-
-    // Valider le format du sous-domaine (alphanumérique et tirets uniquement)
-    if (!/^[a-z0-9-]+$/.test(formData.subdomain)) {
-      Alert.alert('Erreur', 'Le sous-domaine doit contenir uniquement des lettres minuscules, chiffres et tirets');
+      setErrorMessage('Veuillez entrer le nom de votre association');
       return false;
     }
 
     if (!isValidPostalCode(formData.postalCode)) {
-      Alert.alert('Erreur', 'Veuillez entrer un code postal valide (5 chiffres)');
-      return false;
-    }
-
-    if (!departmentInfo) {
-      Alert.alert('Erreur', 'Département non identifié. Vérifiez votre code postal');
+      setErrorMessage('Veuillez entrer un code postal valide (5 chiffres)');
       return false;
     }
 
     if (!formData.city.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer la ville');
+      setErrorMessage('Veuillez entrer la ville');
+      return false;
+    }
+
+    if (!formData.country.trim()) {
+      setErrorMessage('Veuillez entrer le pays');
+      return false;
+    }
+
+    if (!formData.representativeName.trim()) {
+      setErrorMessage('Veuillez entrer le nom complet du représentant');
+      return false;
+    }
+
+    if (!formData.representativeEmail.trim()) {
+      setErrorMessage('Veuillez entrer l\'email du représentant');
+      return false;
+    }
+
+    if (!formData.representativePhone.trim()) {
+      setErrorMessage('Veuillez entrer le téléphone du représentant');
+      return false;
+    }
+
+    if (!formData.password.trim()) {
+      setErrorMessage('Veuillez entrer un mot de passe');
+      return false;
+    }
+
+    if (formData.password.length < 12) {
+      setErrorMessage('Le mot de passe doit contenir au moins 12 caractères');
+      return false;
+    }
+
+    if (!formData.confirmPassword.trim()) {
+      setErrorMessage('Veuillez confirmer le mot de passe');
+      return false;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setErrorMessage('Les mots de passe ne correspondent pas');
       return false;
     }
 
     return true;
-  };
-
-  const validateStep2 = (): boolean => {
-    if (!formData.firstName.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer votre prénom');
-      return false;
-    }
-
-    if (!formData.lastName.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer votre nom');
-      return false;
-    }
-
-    if (!formData.email.trim()) {
-      Alert.alert('Erreur', 'Veuillez entrer votre email');
-      return false;
-    }
-
-    // Validation email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      Alert.alert('Erreur', 'Email invalide');
-      return false;
-    }
-
-    if (formData.password.length < 8) {
-      Alert.alert('Erreur', 'Le mot de passe doit contenir au moins 8 caractères');
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleNext = () => {
-    if (step === 1 && validateStep1()) {
-      setStep(2);
-    } else if (step === 2 && validateStep2()) {
-      setStep(3);
-    }
-  };
-
-  const handlePrevious = () => {
-    if (step > 1) {
-      setStep(step - 1);
-    }
   };
 
   const handleSignup = async () => {
+    if (!validateForm()) {
+      return;
+    }
+
     try {
       setLoading(true);
+      setErrorMessage('');
 
-      // TODO: Appel API pour créer l'organisation
-      // const response = await authService.signupOrganization(formData);
+      // Séparer le nom complet en prénom et nom
+      const nameParts = formData.representativeName.trim().split(' ');
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(' ') || nameParts[0];
 
-      // Simulation pour le moment
-      console.log('Inscription organisation:', formData);
-      console.log('Département:', departmentInfo);
+      // Appel API pour créer l'association
+      const response = await AuthApi.registerAssociation({
+        association: {
+          name: formData.organizationName,
+          siret: formData.siret || undefined,
+          rna: formData.rna || undefined,
+          city: formData.city,
+          postalCode: formData.postalCode,
+          country: formData.country,
+          address: formData.address || undefined,
+        },
+        responsable: {
+          firstName,
+          lastName,
+          email: formData.representativeEmail,
+          password: formData.password,
+          passwordConfirmation: formData.confirmPassword,
+          city_code: formData.postalCode,
+          phone: formData.representativePhone,
+        },
+      });
 
-      // Simuler un délai
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Afficher la card de confirmation
-      setShowSuccessCard(true);
+      if (response.success) {
+        // Afficher la carte de succès
+        setShowSuccessCard(true);
+      }
     } catch (error: any) {
-      Alert.alert('Erreur', error.message || 'Une erreur est survenue lors de l\'inscription');
+      console.error('Error during signup:', error);
+
+      let displayErrorMessage = 'Une erreur est survenue lors de l\'inscription';
+
+      if (error instanceof ApiError) {
+        displayErrorMessage = error.message;
+      } else if (error instanceof Error) {
+        displayErrorMessage = error.message;
+      }
+
+      setErrorMessage(displayErrorMessage);
     } finally {
       setLoading(false);
     }
   };
-
-  const paddingTop = isWeb ? 0 : Platform.OS === 'ios' ? 100 : (StatusBar.currentHeight || 0) + 90;
-  const headerPaddingTop = isWeb ? 10 : Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 0) + 10;
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: headerPaddingTop }]}>
-        <View style={styles.headerLeft}>
-          <View style={[styles.logo, { width: isWeb ? 60 : 45, height: isWeb ? 60 : 45 }]}>
-            <Text style={styles.logoText}>C</Text>
-          </View>
-          <View>
-            <Text style={[styles.appName, { fontSize: isWeb ? 28 : 20 }]}>CadetApp</Text>
-            <Text style={[styles.appSubtitle, { fontSize: isWeb ? 14 : 12 }]}>Créer votre association</Text>
-          </View>
-        </View>
-        <Button
-          variant="ghost"
-          size={isWeb ? "default" : "sm"}
-          onPress={onNavigateToLogin}
-          style={styles.loginButton}
-        >
-          <Text style={[styles.loginButtonText, { fontSize: isWeb ? 14 : 12 }]}>Se connecter</Text>
-        </Button>
-      </View>
-
       <ScrollView
-        style={{ flex: 1, paddingTop }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.formContainer}>
-          <View style={[styles.card, isWeb && styles.cardWeb]}>
-            {/* Card de succès */}
-            {showSuccessCard ? (
-              <View style={styles.successContainer}>
-                <View style={styles.successIconContainer}>
-                  <Text style={styles.successIcon}>✅</Text>
-                </View>
-                <Text style={styles.successTitle}>Inscription enregistrée !</Text>
-                <Text style={styles.successMessage}>
-                  Votre demande d'inscription a bien été enregistrée.{'\n\n'}
-                  ⏳ Un super administrateur va examiner votre demande.{'\n\n'}
-                  Vous recevrez un email de confirmation une fois votre association validée.
-                </Text>
-                <Button
-                  onPress={onNavigateToLogin}
-                  style={styles.successButton}
-                >
-                  Retour à la connexion
-                </Button>
+        {showSuccessCard ? (
+          /* Carte de succès */
+          <View style={styles.successContainer}>
+            <View style={styles.successIconContainer}>
+              <Text style={styles.successIcon}>✅</Text>
+            </View>
+            <Text style={styles.successTitle}>Inscription enregistrée !</Text>
+            <Text style={styles.successMessage}>
+              Votre demande d'inscription a bien été enregistrée.{'\n\n'}
+              ⏳ Un super administrateur va examiner votre demande.{'\n\n'}
+              Vous recevrez un email de confirmation une fois votre association validée.
+            </Text>
+            <TouchableOpacity
+              style={styles.successButton}
+              onPress={onNavigateToLogin}
+            >
+              <Text style={styles.successButtonText}>Retour à la connexion</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            {/* Header avec retour */}
+            <View style={styles.headerRow}>
+              <TouchableOpacity style={styles.backButton} onPress={onNavigateToLogin}>
+                <ArrowLeft color={colors.foreground} size={24} />
+              </TouchableOpacity>
+              <View style={styles.headerTitles}>
+                <Text style={styles.pageTitle}>Inscription Association</Text>
+                <Text style={styles.pageSubtitle}>Créez le compte de votre association</Text>
               </View>
-            ) : (
-              <>
-                <Text style={styles.title}>Créer votre espace</Text>
-                <Text style={styles.subtitle}>
-                  {step === 1 && 'Informations de votre association'}
-                  {step === 2 && 'Vos informations personnelles'}
-                  {step === 3 && 'Récapitulatif'}
-                </Text>
-
-            {/* Indicateur de progression */}
-            <View style={styles.progressContainer}>
-              <View style={[styles.progressDot, step >= 1 && styles.progressDotActive]} />
-              <View style={[styles.progressLine, step >= 2 && styles.progressLineActive]} />
-              <View style={[styles.progressDot, step >= 2 && styles.progressDotActive]} />
-              <View style={[styles.progressLine, step >= 3 && styles.progressLineActive]} />
-              <View style={[styles.progressDot, step >= 3 && styles.progressDotActive]} />
             </View>
 
-            {/* ÉTAPE 1: Informations de l'association */}
-            {step === 1 && (
-              <View>
-                <Input
-                  label="Nom de votre association *"
-                  placeholder="Ex: Cadet de la Somme"
-                  value={formData.organizationName}
-                  onChangeText={(text) => setFormData({ ...formData, organizationName: text })}
-                  leftIcon={<Building2 color="#94a3b8" size={20} />}
-                />
+            <View style={styles.formContainer}>
+          {/* Message d'erreur */}
+          {errorMessage ? (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
 
-                <Input
-                  label="Sous-domaine *"
-                  placeholder="Ex: cadet-somme"
-                  value={formData.subdomain}
-                  onChangeText={(text) => setFormData({ ...formData, subdomain: text.toLowerCase() })}
-                  autoCapitalize="none"
-                />
-                <Text style={styles.hint}>
-                  Votre URL sera : {formData.subdomain || 'votre-nom'}.cadetapp.fr
+          {/* Section Informations de l'association */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Building2 color={colors.foreground} size={22} />
+              <Text style={styles.sectionTitle}>Informations de l'association</Text>
+            </View>
+            <Text style={styles.sectionSubtitle}>Renseignez les informations officielles</Text>
+
+            {/* Nom de l'association */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Nom de l'association <Text style={styles.required}>*</Text>
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: Association des Cadets de Paris"
+                placeholderTextColor={colors.gray[400]}
+                value={formData.organizationName}
+                onChangeText={(text) => {
+                  setFormData({ ...formData, organizationName: text });
+                  if (errorMessage) setErrorMessage('');
+                }}
+              />
+            </View>
+
+            {/* SIRET et RNA (2 colonnes) */}
+            <View style={styles.row}>
+              <View style={styles.halfWidth}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>SIRET (optionnel)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="14 chiffres"
+                    placeholderTextColor={colors.gray[400]}
+                    value={formData.siret || ''}
+                    onChangeText={(text) => setFormData({ ...formData, siret: text.replace(/\D/g, '').trim() === '' ? null : text.replace(/\D/g, '') })}
+                    keyboardType="number-pad"
+                    maxLength={14}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.halfWidth}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>RNA (optionnel)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="W123456789"
+                    placeholderTextColor={colors.gray[400]}
+                    value={formData.rna || ''}
+                    onChangeText={(text) => setFormData({ ...formData, rna: text.trim() === '' ? null : text.toUpperCase() })}
+                    autoCapitalize="characters"
+                    maxLength={10}
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* Adresse */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Adresse (optionnel)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: 12 rue de la République"
+                placeholderTextColor={colors.gray[400]}
+                value={formData.address || ''}
+                onChangeText={(text) => {
+                  setFormData({ ...formData, address: text.trim() === '' ? null : text });
+                  if (errorMessage) setErrorMessage('');
+                }}
+              />
+            </View>
+
+            {/* Code postal et Ville (2 colonnes) */}
+            <View style={styles.row}>
+              <View style={styles.halfWidth}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Code postal <Text style={styles.required}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="75001"
+                    placeholderTextColor={colors.gray[400]}
+                    value={formData.postalCode}
+                    onChangeText={(text) => {
+                      handlePostalCodeChange(text);
+                      if (errorMessage) setErrorMessage('');
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={5}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.halfWidth}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Ville <Text style={styles.required}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Paris"
+                    placeholderTextColor={colors.gray[400]}
+                    value={formData.city}
+                    onChangeText={(text) => {
+                      setFormData({ ...formData, city: text });
+                      if (errorMessage) setErrorMessage('');
+                    }}
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* Affichage du département détecté */}
+            {departmentInfo && (
+              <View style={styles.departmentInfo}>
+                <Text style={styles.departmentLabel}>📍 Département détecté :</Text>
+                <Text style={styles.departmentText}>
+                  {departmentInfo.name} ({departmentInfo.code})
                 </Text>
-
-                <Input
-                  label="SIREN (optionnel)"
-                  placeholder="Ex: 123456789"
-                  value={formData.siren || ''}
-                  onChangeText={(text) => setFormData({ ...formData, siren: text.trim() === '' ? null : text })}
-                  keyboardType="number-pad"
-                  maxLength={9}
-                />
-
-                <Input
-                  label="RNA (optionnel)"
-                  placeholder="Ex: W751234567"
-                  value={formData.rna || ''}
-                  onChangeText={(text) => setFormData({ ...formData, rna: text.trim() === '' ? null : text.toUpperCase() })}
-                  autoCapitalize="characters"
-                  maxLength={10}
-                />
-
-                <Input
-                  label="Code postal *"
-                  placeholder="Ex: 80000"
-                  value={formData.postalCode}
-                  onChangeText={handlePostalCodeChange}
-                  keyboardType="number-pad"
-                  maxLength={5}
-                  leftIcon={<MapPin color="#94a3b8" size={20} />}
-                />
-
-                {/* Afficher le département détecté */}
-                {departmentInfo && (
-                  <View style={styles.departmentInfo}>
-                    <Text style={styles.departmentLabel}>📍 Département détecté :</Text>
-                    <Text style={styles.departmentText}>
-                      {departmentInfo.name} ({departmentInfo.code})
-                    </Text>
-                    <Text style={styles.regionText}>{departmentInfo.region}</Text>
-                  </View>
-                )}
-
-                <Input
-                  label="Ville *"
-                  placeholder="Ex: Amiens"
-                  value={formData.city}
-                  onChangeText={(text) => setFormData({ ...formData, city: text })}
-                />
-
-                <Input
-                  label="Adresse (optionnel)"
-                  placeholder="Ex: 123 rue de la République"
-                  value={formData.address || ''}
-                  onChangeText={(text) => setFormData({ ...formData, address: text.trim() === '' ? null : text })}
-                  multiline
-                  numberOfLines={2}
-                />
-
-                <Button onPress={handleNext} style={styles.nextButton}>
-                  Continuer
-                </Button>
+                <Text style={styles.regionText}>{departmentInfo.region}</Text>
               </View>
             )}
 
-            {/* ÉTAPE 2: Informations personnelles */}
-            {step === 2 && (
-              <View>
-                <View style={styles.row}>
-                  <View style={styles.halfWidth}>
-                    <Input
-                      label="Prénom *"
-                      placeholder="Votre prénom"
-                      value={formData.firstName}
-                      onChangeText={(text) => setFormData({ ...formData, firstName: text })}
-                      leftIcon={<User color="#94a3b8" size={20} />}
-                    />
-                  </View>
-                  <View style={styles.halfWidth}>
-                    <Input
-                      label="Nom *"
-                      placeholder="Votre nom"
-                      value={formData.lastName}
-                      onChangeText={(text) => setFormData({ ...formData, lastName: text })}
-                    />
-                  </View>
-                </View>
+            {/* Pays */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Pays <Text style={styles.required}>*</Text>
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="France"
+                placeholderTextColor={colors.gray[400]}
+                value={formData.country}
+                onChangeText={(text) => {
+                  setFormData({ ...formData, country: text });
+                  if (errorMessage) setErrorMessage('');
+                }}
+              />
+            </View>
+          </View>
 
-                <Input
-                  label="Email *"
-                  placeholder="votre@email.com"
-                  value={formData.email}
-                  onChangeText={(text) => setFormData({ ...formData, email: text })}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  leftIcon={<Mail color="#94a3b8" size={20} />}
-                />
+          {/* Section Représentant légal */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Représentant légal</Text>
+            <Text style={styles.sectionSubtitle}>Informations du président ou représentant</Text>
 
-                <Input
-                  label="Mot de passe *"
-                  placeholder="••••••••"
-                  value={formData.password}
-                  onChangeText={(text) => setFormData({ ...formData, password: text })}
-                  secureTextEntry
-                  leftIcon={<Lock color="#94a3b8" size={20} />}
-                />
-                <Text style={styles.hint}>Minimum 8 caractères</Text>
+            {/* Nom complet */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>
+                Nom complet <Text style={styles.required}>*</Text>
+              </Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Jean Dupont"
+                placeholderTextColor={colors.gray[400]}
+                value={formData.representativeName}
+                onChangeText={(text) => {
+                  setFormData({ ...formData, representativeName: text });
+                  if (errorMessage) setErrorMessage('');
+                }}
+              />
+            </View>
 
-                <View style={styles.buttonRow}>
-                  <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
-                    Retour
-                  </Button>
-                  <Button onPress={handleNext} style={styles.halfButton}>
-                    Continuer
-                  </Button>
-                </View>
-              </View>
-            )}
-
-            {/* ÉTAPE 3: Récapitulatif */}
-            {step === 3 && (
-              <View>
-                <View style={styles.summaryCard}>
-                  <Text style={styles.summaryTitle}>Association</Text>
-                  <Text style={styles.summaryText}>{formData.organizationName}</Text>
-                  <Text style={styles.summaryLabel}>URL : {formData.subdomain}.cadetapp.fr</Text>
-                  {formData.siren && <Text style={styles.summaryLabel}>SIREN : {formData.siren}</Text>}
-                  {formData.rna && <Text style={styles.summaryLabel}>RNA : {formData.rna}</Text>}
-                </View>
-
-                <View style={styles.summaryCard}>
-                  <Text style={styles.summaryTitle}>Localisation</Text>
-                  <Text style={styles.summaryText}>{formData.city} ({formData.postalCode})</Text>
-                  {formData.address && <Text style={styles.summaryLabel}>{formData.address}</Text>}
-                  {departmentInfo && (
-                    <Text style={styles.summaryLabel}>
-                      {departmentInfo.name} • {departmentInfo.region}
-                    </Text>
-                  )}
-                </View>
-
-                <View style={styles.summaryCard}>
-                  <Text style={styles.summaryTitle}>Administrateur</Text>
-                  <Text style={styles.summaryText}>
-                    {formData.firstName} {formData.lastName}
+            {/* Email et Téléphone (2 colonnes) */}
+            <View style={styles.row}>
+              <View style={styles.halfWidth}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Email <Text style={styles.required}>*</Text>
                   </Text>
-                  <Text style={styles.summaryLabel}>{formData.email}</Text>
-                </View>
-
-                <View style={styles.infoBox}>
-                  <Text style={styles.infoText}>
-                    🎉 Profitez de 14 jours d'essai gratuit avec accès à toutes les fonctionnalités !
-                  </Text>
-                </View>
-
-                <View style={styles.buttonRow}>
-                  <Button variant="outline" onPress={handlePrevious} style={styles.halfButton}>
-                    Retour
-                  </Button>
-                  <Button onPress={handleSignup} isLoading={loading} style={styles.halfButton}>
-                    Créer mon espace
-                  </Button>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="president@email.fr"
+                    placeholderTextColor={colors.gray[400]}
+                    value={formData.representativeEmail}
+                    onChangeText={(text) => {
+                      setFormData({ ...formData, representativeEmail: text });
+                      if (errorMessage) setErrorMessage('');
+                    }}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
                 </View>
               </View>
+
+              <View style={styles.halfWidth}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Téléphone <Text style={styles.required}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="06 12 34 56 78"
+                    placeholderTextColor={colors.gray[400]}
+                    value={formData.representativePhone}
+                    onChangeText={(text) => {
+                      setFormData({ ...formData, representativePhone: text });
+                      if (errorMessage) setErrorMessage('');
+                    }}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* Mot de passe et Confirmation (2 colonnes) */}
+            <View style={styles.row}>
+              <View style={styles.halfWidth}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Mot de passe <Text style={styles.required}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="••••••••"
+                    placeholderTextColor={colors.gray[400]}
+                    value={formData.password}
+                    onChangeText={(text) => {
+                      setFormData({ ...formData, password: text });
+                      if (errorMessage) setErrorMessage('');
+                    }}
+                    secureTextEntry
+                  />
+                </View>
+              </View>
+
+              <View style={styles.halfWidth}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>
+                    Confirmer <Text style={styles.required}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="••••••••"
+                    placeholderTextColor={colors.gray[400]}
+                    value={formData.confirmPassword}
+                    onChangeText={(text) => {
+                      setFormData({ ...formData, confirmPassword: text });
+                      if (errorMessage) setErrorMessage('');
+                    }}
+                    secureTextEntry
+                  />
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Bouton de soumission */}
+          <TouchableOpacity
+            style={[styles.submitButton, loading && styles.submitButtonDisabled]}
+            onPress={handleSignup}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color={colors.white} size="small" />
+            ) : (
+              <Text style={styles.submitButtonText}>Soumettre la demande d'inscription</Text>
             )}
-              </>
-            )}
+          </TouchableOpacity>
+
+          {/* Lien vers connexion */}
+          <View style={styles.loginLink}>
+            <Text style={styles.loginLinkText}>Vous avez déjà un compte ? </Text>
+            <TouchableOpacity onPress={onNavigateToLogin}>
+              <Text style={styles.loginLinkButton}>Se connecter</Text>
+            </TouchableOpacity>
           </View>
         </View>
+          </>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -439,221 +516,200 @@ export default function OrganizationSignupScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#2563eb',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    width: '100%',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    zIndex: 1000,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  logo: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoText: {
-    fontSize: 30,
-    color: '#2563eb',
-    fontWeight: 'bold',
-  },
-  appName: {
-    color: '#fff',
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  appSubtitle: {
-    color: '#bfdbfe',
-  },
-  loginButton: {
-    backgroundColor: 'transparent',
-  },
-  loginButtonText: {
-    color: '#fff',
-    fontWeight: '600',
+    backgroundColor: colors.muted,
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    padding: 20,
+    padding: spacing[4],
+    paddingTop: spacing[8],
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing[8],
+    gap: spacing[4],
+  },
+  backButton: {
+    padding: spacing[2],
+  },
+  headerTitles: {
+    flex: 1,
+  },
+  pageTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.foreground,
+    marginBottom: spacing[1],
+  },
+  pageSubtitle: {
+    fontSize: 15,
+    color: colors.gray[600],
   },
   formContainer: {
     width: '100%',
-    maxWidth: 600,
+    maxWidth: 700,
     alignSelf: 'center',
   },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 24,
+  errorBox: {
+    backgroundColor: colors.errorLight,
+    padding: spacing[4],
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing[6],
+    borderLeftWidth: 4,
+    borderLeftColor: colors.error,
   },
-  cardWeb: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.3,
-    shadowRadius: 30,
-    elevation: 10,
+  errorText: {
+    fontSize: 14,
+    color: colors.errorDark,
+    lineHeight: 20,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 8,
+  section: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius['2xl'],
+    padding: spacing[8],
+    marginBottom: spacing[6],
+    ...shadows.md,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#64748b',
-    marginBottom: 32,
-  },
-  progressContainer: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 32,
+    gap: spacing[3],
+    marginBottom: spacing[2],
   },
-  progressDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#cbd5e1',
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.foreground,
   },
-  progressDotActive: {
-    backgroundColor: '#2563eb',
-  },
-  progressLine: {
-    width: 60,
-    height: 2,
-    backgroundColor: '#cbd5e1',
-    marginHorizontal: 8,
-  },
-  progressLineActive: {
-    backgroundColor: '#2563eb',
-  },
-  hint: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: -8,
-    marginBottom: 16,
-  },
-  departmentInfo: {
-    backgroundColor: '#eff6ff',
-    padding: 16,
-    borderRadius: 12,
-    marginTop: -8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#dbeafe',
-  },
-  departmentLabel: {
-    fontSize: 12,
-    color: '#64748b',
-    marginBottom: 4,
-  },
-  departmentText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 2,
-  },
-  regionText: {
+  sectionSubtitle: {
     fontSize: 14,
-    color: '#2563eb',
+    color: colors.gray[600],
+    marginBottom: spacing[6],
+  },
+  inputGroup: {
+    marginBottom: spacing[5],
+  },
+  label: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.foreground,
+    marginBottom: spacing[2],
+  },
+  required: {
+    color: colors.error,
+  },
+  input: {
+    backgroundColor: colors.muted,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[4],
+    fontSize: 15,
+    color: colors.foreground,
+    borderWidth: 0,
   },
   row: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
+    gap: spacing[4],
   },
   halfWidth: {
     flex: 1,
   },
-  nextButton: {
-    marginTop: 16,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-  },
-  halfButton: {
-    flex: 1,
-  },
-  summaryCard: {
-    backgroundColor: '#f8fafc',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
+  departmentInfo: {
+    backgroundColor: colors.infoLight,
+    padding: spacing[4],
+    borderRadius: borderRadius.lg,
+    marginTop: -spacing[2],
+    marginBottom: spacing[5],
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.info,
   },
-  summaryTitle: {
+  departmentLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#64748b',
-    textTransform: 'uppercase',
-    marginBottom: 8,
+    color: colors.gray[600],
+    marginBottom: spacing[1],
   },
-  summaryText: {
+  departmentText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 4,
+    color: colors.foreground,
+    marginBottom: spacing[1],
   },
-  summaryLabel: {
+  regionText: {
     fontSize: 14,
-    color: '#64748b',
+    color: colors.info,
   },
-  infoBox: {
-    backgroundColor: '#dbeafe',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 16,
+  submitButton: {
+    backgroundColor: colors.navy,
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[6],
+    alignItems: 'center',
+    ...shadows.sm,
   },
-  infoText: {
-    fontSize: 14,
-    color: '#1e40af',
-    textAlign: 'center',
+  submitButtonDisabled: {
+    opacity: 0.7,
+  },
+  submitButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.white,
+  },
+  loginLink: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: spacing[6],
+  },
+  loginLinkText: {
+    fontSize: 15,
+    color: colors.gray[600],
+  },
+  loginLinkButton: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.navy,
+    textDecorationLine: 'underline',
   },
   successContainer: {
+    flex: 1,
     alignItems: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 16,
+    justifyContent: 'center',
+    padding: spacing[6],
+    maxWidth: 500,
+    alignSelf: 'center',
+    width: '100%',
   },
   successIconContainer: {
-    marginBottom: 24,
+    marginBottom: spacing[6],
   },
   successIcon: {
-    fontSize: 64,
+    fontSize: 80,
   },
   successTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 16,
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.foreground,
+    marginBottom: spacing[4],
     textAlign: 'center',
   },
   successMessage: {
     fontSize: 16,
-    color: '#64748b',
+    color: colors.gray[600],
     textAlign: 'center',
     lineHeight: 24,
-    marginBottom: 32,
+    marginBottom: spacing[8],
   },
   successButton: {
-    width: '100%',
-    maxWidth: 300,
+    backgroundColor: colors.navy,
+    borderRadius: borderRadius.xl,
+    paddingVertical: spacing[4],
+    paddingHorizontal: spacing[8],
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  successButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.white,
   },
 });
