@@ -17,20 +17,33 @@
  */
 
 // Export des services API
-export { CadetsApi } from './cadets.api';
-export { DocumentsApi } from './documents.api';
-export { FoldersApi } from './folders.api';
-export { CandidatsApi } from './candidats.api';
-export { AuthApi } from './auth.api';
-export { AssociationsApi } from './associations.api';
-export { UsersApi } from './users.api';
-export { RolesApi } from './roles.api';
-export { StaffAppApi } from './staffApp.api';
-export { DocumentRequirementsApi } from './document-requirements.api';
+export { CadetsApi } from "@/src/api/features/cadets.api";
+export { DocumentsApi } from "@/src/api/features/documents.api";
+export { FoldersApi } from "@/src/api/folders.api";
+export { CandidatsApi } from "@/src/api/features/candidats.api";
+export { AuthApi } from "@/src/api/features/auth.api";
+export { AssociationsApi } from "@/src/api/features/associations.api";
+export { UsersApi } from "@/src/api/users.api";
+export { RolesApi } from "@/src/api/roles.api";
+export { StaffAppApi } from "@/src/api/staffApp.api";
+export { DocumentRequirementsApi } from "@/src/api/features/document-requirements.api";
 
 // Export de la configuration et des utilitaires
-export { API_CONFIG, ApiError, getAuthHeaders, handleApiResponse } from './config';
-export type { ApiResponse, PaginatedResponse } from './config';
+export {
+  API_CONFIG,
+  ApiError,
+  getAuthHeaders,
+  handleApiResponse,
+} from "@/src/api/config";
+export type { ApiResponse, PaginatedResponse } from "@/src/api/config";
+
+export { apiRequest, api } from "./apiRequest";
+
+// Export des utilitaires de storage et events (NOUVEAU)
+export { tokenStorage } from "./tokenStorage";
+export type { AuthTokens } from "./tokenStorage";
+export { authEventEmitter } from "./authEventEmitter";
+export type { AuthEventType, AuthEventData } from "./authEventEmitter";
 
 // Export des mappers
 export {
@@ -39,20 +52,31 @@ export {
   mapUserToCadetRequest,
   convertDateFormat,
   mapBackendRoleToFrontend,
-} from './mappers';
+} from "./mappers";
 
-// Export des types
+// Export des types de base
 export type {
-
   // Authentification
   LoginRequest,
-  LoginResponse,
   RegisterRequest,
   RegisterResponse,
+  RegisterCandidatRequest,
+  RegisterCandidatResponse,
 
   // Pagination
   PaginationParams,
-} from './types';
+
+  // Cadets
+  CadetResponse,
+  GetAllCadetsResponse,
+  GetCadetByIdResponse,
+  UpdateCadetRoleRequest,
+  UpdateCadetRoleResponse,
+  CadetsFilterParams,
+
+  // Candidats
+  GetAllCandidatsResponse,
+} from "@/src/api/types";
 
 // Documents
 export type {
@@ -65,37 +89,20 @@ export type {
   UpdateDocumentTypeData,
   DocumentTypeCategory,
   RequiredFor as DocumentRequiredFor,
-} from './documents.api';
+} from "./features/documents.api";
 
-// Cadets
-export type {
-  CadetResponse,
-  GetAllCadetsResponse,
-  GetCadetByIdResponse,
-  UpdateCadetRoleRequest,
-  UpdateCadetRoleResponse,
-  CadetsFilterParams,
-} from './types/cadet';
-
-// Candidats
-export type {
-  RegisterCandidatRequest,
-  RegisterCandidatResponse,
-  GetAllCandidatsResponse,
-} from './types/candidat';
-
-// Auth
+// Auth (types spécifiques de auth.api)
 export type {
   RegisterAssociationData,
   RegisterMemberData,
   RegisterMemberResponse,
   LoginData,
-  AuthTokens,
+  AuthTokens as AuthApiTokens,
   AuthUser,
   AuthAssociation,
   RegisterAssociationResponse,
   LoginResponse,
-} from './auth.api';
+} from "@/src/api/features/auth.api";
 
 // Associations
 export type {
@@ -103,14 +110,14 @@ export type {
   AssociationWithStats,
   GetAllAssociationsResponse,
   GetPendingAssociationsResponse,
-} from './associations.api';
+} from "./features/associations.api";
 
 // Users
 export type {
   UserResponse,
   GetAllUsersResponse,
   UsersFilterParams,
-} from './users.api';
+} from "./users.api";
 
 // Roles
 export type {
@@ -118,7 +125,7 @@ export type {
   Permission,
   RoleWithPermissions,
   GetRolesResponse,
-} from './roles.api';
+} from "./roles.api";
 
 // Folders
 export type {
@@ -130,7 +137,7 @@ export type {
   AddFolderMemberData,
   UpdateFolderMemberData,
   MoveDocumentData,
-} from './folders.api';
+} from "./folders.api";
 
 // StaffApp
 export type {
@@ -138,7 +145,7 @@ export type {
   UpdateRoleData,
   UpdatePermissionsData,
   UserWithRole,
-} from './staffApp.api';
+} from "./staffApp.api";
 
 // Document Requirements
 export type {
@@ -151,6 +158,9 @@ export type {
   CompletionCheckResponse,
   RequiredFor,
   RequiredAt,
-} from './document-requirements.api';
+} from "@/src/api/features/document-requirements.api";
 
-export { RequiredForLabels, RequiredAtLabels } from './document-requirements.api';
+export {
+  RequiredForLabels,
+  RequiredAtLabels,
+} from "@/src/api/features/document-requirements.api";

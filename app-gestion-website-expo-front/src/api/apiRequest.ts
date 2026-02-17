@@ -5,36 +5,11 @@
  * ========================================
  */
 
-import { API_CONFIG } from './config';
-import { tokenStorage, type AuthTokens } from './tokenStorage';
-import { authEventEmitter } from './authEventEmitter';
+import { API_CONFIG, ApiError } from "./config";
+import { tokenStorage, type AuthTokens } from "./tokenStorage";
+import { authEventEmitter } from "./authEventEmitter";
 
-// ========================================
-// API ERROR CLASS
-// ========================================
-
-export class ApiRequestError extends Error {
-  constructor(
-    message: string,
-    public code: string = 'API_ERROR',
-    public status: number = 500,
-    public errors?: Array<{ field: string; message: string }>
-  ) {
-    super(message);
-    this.name = 'ApiRequestError';
-  }
-
-  static fromResponse(data: any, status: number): ApiRequestError {
-    return new ApiRequestError(
-      data.message || 'Une erreur est survenue',
-      data.code || 'API_ERROR',
-      status,
-      data.errors
-    );
-  }
-}
-
-// ========================================
+// =====================================
 // REFRESH TOKEN LOGIC
 // ========================================
 
@@ -62,14 +37,14 @@ async function refreshAccessToken(): Promise<string> {
   const refreshToken = await tokenStorage.getRefreshToken();
 
   if (!refreshToken) {
-    throw new ApiRequestError('No refresh token available', 'NO_REFRESH_TOKEN', 401);
+    throw new ApiError("No refresh token available", 401, "NO_REFRESH_TOKEN");
   }
 
   try {
     const response = await fetch(`${API_CONFIG.BASE_URL}/auth/refresh`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({ refreshToken }),
     });
@@ -81,18 +56,29 @@ async function refreshAccessToken(): Promise<string> {
       await tokenStorage.clearTokens();
       // Émettre l'événement de session expirée
       authEventEmitter.emitSessionExpired();
-      throw new ApiRequestError(
-        data.message || 'Session expired',
-        data.code || 'REFRESH_FAILED',
-        response.status
+      throw new ApiError(
+        data.message || "Session expirée",
+        response.status,
+        data.code || "REFRESH_FAILED",
       );
     }
 
     // Sauvegarder les nouveaux tokens
+    // Les tokens peuvent être des objets {value, expiresAt} ou des strings directes
+    const accessToken = typeof data.data.accessToken === 'object'
+      ? data.data.accessToken.value
+      : data.data.accessToken;
+    const refreshTokenValue = typeof data.data.refreshToken === 'object'
+      ? data.data.refreshToken.value
+      : data.data.refreshToken;
+    const expiresAt = typeof data.data.accessToken === 'object'
+      ? data.data.accessToken.expiresAt
+      : data.data.expiresAt;
+
     const tokens: AuthTokens = {
-      accessToken: data.data.accessToken,
-      refreshToken: data.data.refreshToken,
-      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1h par défaut
+      accessToken,
+      refreshToken: refreshTokenValue,
+      expiresAt: expiresAt || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     };
 
     await tokenStorage.setTokens(tokens);
@@ -101,7 +87,7 @@ async function refreshAccessToken(): Promise<string> {
   } catch (error) {
     await tokenStorage.clearTokens();
     // Émettre l'événement de session expirée
-    authEventEmitter.emitSessionExpired();
+    authEventEmitter.emitSessionExpired("refresh_error");
     throw error;
   }
 }
@@ -117,7 +103,7 @@ async function handleTokenRefresh(): Promise<string> {
         resolve(token);
       });
       // Timeout de sécurité
-      setTimeout(() => reject(new Error('Refresh timeout')), 10000);
+      setTimeout(() => reject(new Error("Refresh timeout")), 10000);
     });
   }
 
@@ -141,7 +127,7 @@ async function handleTokenRefresh(): Promise<string> {
 // MAIN API REQUEST FUNCTION
 // ========================================
 
-interface RequestOptions extends Omit<RequestInit, 'body'> {
+interface RequestOptions extends Omit<RequestInit, "body"> {
   body?: Record<string, unknown> | FormData;
   skipAuth?: boolean;
   retryCount?: number;
@@ -153,7 +139,7 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
  */
 export async function apiRequest<T = unknown>(
   endpoint: string,
-  options: RequestOptions = {}
+  options: RequestOptions = {},
 ): Promise<T> {
   const {
     body,
@@ -178,17 +164,20 @@ export async function apiRequest<T = unknown>(
   if (!skipAuth) {
     const accessToken = await tokenStorage.getAccessToken();
     if (accessToken) {
-      headers['Authorization'] = `Bearer ${accessToken}`;
+      headers["Authorization"] = `Bearer ${accessToken}`;
     }
   }
 
   // Construire la requête
-  const url = endpoint.startsWith('http') ? endpoint : `${API_CONFIG.BASE_URL}${endpoint}`;
+  const url = endpoint.startsWith("http")
+    ? endpoint
+    : `${API_CONFIG.BASE_URL}${endpoint}`;
 
   const requestInit: RequestInit = {
     ...fetchOptions,
     headers,
-    body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
+    body:
+      body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
   };
 
   // Timeout controller
@@ -206,12 +195,18 @@ export async function apiRequest<T = unknown>(
 
     // Token expiré → tenter un refresh
     // Ne pas tenter de refresh si c'est une erreur de compte inactif ou d'association inactive
-    const isAccountError = data.code === 'ACCOUNT_INACTIVE' ||
-                          data.code === 'ASSOCIATION_INACTIVE' ||
-                          data.message?.includes('compte n\'est pas encore activé') ||
-                          data.message?.includes('association n\'est pas active');
+    const isAccountError =
+      data.code === "ACCOUNT_INACTIVE" ||
+      data.code === "ASSOCIATION_INACTIVE" ||
+      data.message?.includes("compte n'est pas encore activé") ||
+      data.message?.includes("association n'est pas active");
 
-    if (response.status === 401 && !skipAuth && retryCount < 1 && !isAccountError) {
+    if (
+      response.status === 401 &&
+      !skipAuth &&
+      retryCount < 1 &&
+      !isAccountError
+    ) {
       try {
         await handleTokenRefresh();
 
@@ -222,40 +217,40 @@ export async function apiRequest<T = unknown>(
         });
       } catch (refreshError) {
         // Échec du refresh → l'utilisateur doit se reconnecter
-        throw new ApiRequestError(
-          'Votre session a expiré. Veuillez vous reconnecter.',
-          'SESSION_EXPIRED',
-          401
+        throw new ApiError(
+          "Votre session a expiré. Veuillez vous reconnecter.",
+          401,
+          "SESSION_EXPIRED",
         );
       }
     }
 
     // Gérer les erreurs
     if (!response.ok || data.success === false) {
-      throw ApiRequestError.fromResponse(data, response.status);
+      throw ApiError.fromResponse(data, response.status);
     }
 
     return data.data as T;
   } catch (error: any) {
     clearTimeout(timeoutId);
 
-    if (error instanceof ApiRequestError) {
+    if (error instanceof ApiError) {
       throw error;
     }
 
-    if (error.name === 'AbortError') {
-      throw new ApiRequestError(
-        'La requête a expiré. Vérifiez votre connexion.',
-        'TIMEOUT',
-        408
+    if (error.name === "AbortError") {
+      throw new ApiError(
+        "La requête a expiré. Vérifiez votre connexion.",
+        408,
+        "TIMEOUT",
       );
     }
 
     // Erreur réseau
-    throw new ApiRequestError(
-      'Impossible de contacter le serveur. Vérifiez votre connexion.',
-      'NETWORK_ERROR',
-      0
+    throw new ApiError(
+      "Impossible de contacter le serveur. Vérifiez votre connexion.",
+      0,
+      "NETWORK_ERROR",
     );
   }
 }
@@ -266,17 +261,23 @@ export async function apiRequest<T = unknown>(
 
 export const api = {
   get: <T = unknown>(endpoint: string, options?: RequestOptions) =>
-    apiRequest<T>(endpoint, { ...options, method: 'GET' }),
+    apiRequest<T>(endpoint, { ...options, method: "GET" }),
 
   post: <T = unknown>(endpoint: string, body?: any, options?: RequestOptions) =>
-    apiRequest<T>(endpoint, { ...options, method: 'POST', body }),
+    apiRequest<T>(endpoint, { ...options, method: "POST", body }),
 
-  put: <T = unknown>(endpoint: string, body?: Record<string, unknown>, options?: RequestOptions) =>
-    apiRequest<T>(endpoint, { ...options, method: 'PUT', body }),
+  put: <T = unknown>(
+    endpoint: string,
+    body?: Record<string, unknown>,
+    options?: RequestOptions,
+  ) => apiRequest<T>(endpoint, { ...options, method: "PUT", body }),
 
-  patch: <T = unknown>(endpoint: string, body?: Record<string, unknown>, options?: RequestOptions) =>
-    apiRequest<T>(endpoint, { ...options, method: 'PATCH', body }),
+  patch: <T = unknown>(
+    endpoint: string,
+    body?: Record<string, unknown>,
+    options?: RequestOptions,
+  ) => apiRequest<T>(endpoint, { ...options, method: "PATCH", body }),
 
   delete: <T = unknown>(endpoint: string, options?: RequestOptions) =>
-    apiRequest<T>(endpoint, { ...options, method: 'DELETE' }),
+    apiRequest<T>(endpoint, { ...options, method: "DELETE" }),
 };

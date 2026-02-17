@@ -1,6 +1,6 @@
-import { ApiResponse } from './config';
-import { api } from './apiRequest';
-import { UrlApi } from './url.api';
+import { ApiResponse } from "./config";
+import { api } from "./apiRequest";
+import { API_ROUTES } from "./url.api";
 
 // Types pour les dossiers
 export interface Folder {
@@ -17,7 +17,7 @@ export interface FolderMember {
   id: number;
   folderId: number;
   userId: number;
-  role: 'viewer' | 'editor' | 'admin';
+  role: "viewer" | "editor" | "admin";
   createdAt: string;
   updatedAt: string;
 }
@@ -30,7 +30,7 @@ export interface CreateFolderData {
   name: string;
   slug?: string;
   parentId?: number | null;
-  visibility?: 'private' | 'members' | 'staff' | 'public';
+  visibility?: "private" | "members" | "staff" | "public";
   description?: string;
   color?: string;
   icon?: string;
@@ -46,11 +46,11 @@ export interface UpdateFolderData {
 
 export interface AddFolderMemberData {
   userId: number;
-  role: 'viewer' | 'editor' | 'admin';
+  role: "viewer" | "editor" | "admin";
 }
 
 export interface UpdateFolderMemberData {
-  role: 'viewer' | 'editor' | 'admin';
+  role: "viewer" | "editor" | "admin";
 }
 
 export interface MoveDocumentData {
@@ -67,7 +67,7 @@ export const FoldersApi = {
    * Récupérer tous les dossiers
    */
   async getAll(): Promise<ApiResponse<{ folders: Folder[] }>> {
-    const data = await api.get<{ folders: Folder[] }>(UrlApi.foldersApi.getAll);
+    const data = await api.get<{ folders: Folder[] }>(API_ROUTES.folders.list);
     return { success: true, data };
   },
 
@@ -75,25 +75,31 @@ export const FoldersApi = {
    * Récupérer mon dossier personnel
    */
   async getMyFolder(): Promise<ApiResponse<{ folder: Folder }>> {
-    const data = await api.get<{ folder: Folder }>(UrlApi.foldersApi.myFolder);
+    const data = await api.get<{ folder: Folder }>(API_ROUTES.folders.my);
     return { success: true, data };
   },
 
   /**
    * Récupérer un dossier par ID
    */
-  async getById(id: number): Promise<ApiResponse<{ folder: FolderWithMembers }>> {
-    const data = await api.get<{ folder: FolderWithMembers }>(UrlApi.foldersApi.get(id));
+  async getById(
+    id: number,
+  ): Promise<ApiResponse<{ folder: FolderWithMembers }>> {
+    const data = await api.get<{ folder: FolderWithMembers }>(
+      API_ROUTES.folders.get(id),
+    );
     return { success: true, data };
   },
 
   /**
    * Créer un nouveau dossier
    */
-  async create(folderData: CreateFolderData): Promise<ApiResponse<{ folder: Folder }>> {
+  async create(
+    folderData: CreateFolderData,
+  ): Promise<ApiResponse<{ folder: Folder }>> {
     const data = await api.post<{ folder: Folder }>(
-      UrlApi.foldersApi.create,
-      folderData
+      API_ROUTES.folders.create,
+      folderData,
     );
     return { success: true, data };
   },
@@ -101,10 +107,13 @@ export const FoldersApi = {
   /**
    * Mettre à jour un dossier
    */
-  async update(id: number, folderData: UpdateFolderData): Promise<ApiResponse<{ folder: Folder }>> {
+  async update(
+    id: number,
+    folderData: UpdateFolderData,
+  ): Promise<ApiResponse<{ folder: Folder }>> {
     const data = await api.put<{ folder: Folder }>(
-      UrlApi.foldersApi.update(id),
-      folderData
+      API_ROUTES.folders.update(id),
+      folderData as unknown as Record<string, unknown>,
     );
     return { success: true, data };
   },
@@ -116,8 +125,8 @@ export const FoldersApi = {
    */
   async delete(id: number, force: boolean = false): Promise<ApiResponse<void>> {
     const url = force
-      ? `${UrlApi.foldersApi.delete(id)}?force=true`
-      : UrlApi.foldersApi.delete(id);
+      ? `${API_ROUTES.folders.delete(id)}?force=true`
+      : API_ROUTES.folders.delete(id);
     await api.delete(url);
     return { success: true, data: undefined };
   },
@@ -126,16 +135,18 @@ export const FoldersApi = {
    * Déplacer un document
    */
   async moveDocument(data: MoveDocumentData): Promise<ApiResponse<void>> {
-    await api.post(UrlApi.foldersApi.moveDocument, data);
+    await api.post(API_ROUTES.folders.moveDocument, data);
     return { success: true, data: undefined };
   },
 
   /**
    * Récupérer les membres d'un dossier
    */
-  async getMembers(folderId: number): Promise<ApiResponse<{ members: FolderMember[] }>> {
+  async getMembers(
+    folderId: number,
+  ): Promise<ApiResponse<{ members: FolderMember[] }>> {
     const data = await api.get<{ members: FolderMember[] }>(
-      UrlApi.foldersApi.getFolderMembers(folderId)
+      API_ROUTES.folders.members.list(folderId),
     );
     return { success: true, data };
   },
@@ -143,10 +154,13 @@ export const FoldersApi = {
   /**
    * Ajouter un membre à un dossier
    */
-  async addMember(folderId: number, memberData: AddFolderMemberData): Promise<ApiResponse<{ member: FolderMember }>> {
+  async addMember(
+    folderId: number,
+    memberData: AddFolderMemberData,
+  ): Promise<ApiResponse<{ member: FolderMember }>> {
     const data = await api.post<{ member: FolderMember }>(
-      UrlApi.foldersApi.addFolderMember(folderId),
-      memberData
+      API_ROUTES.folders.members.add(folderId),
+      memberData,
     );
     return { success: true, data };
   },
@@ -157,11 +171,11 @@ export const FoldersApi = {
   async updateMember(
     folderId: number,
     userId: number,
-    memberData: UpdateFolderMemberData
+    memberData: UpdateFolderMemberData,
   ): Promise<ApiResponse<{ member: FolderMember }>> {
     const data = await api.put<{ member: FolderMember }>(
-      UrlApi.foldersApi.updateFolderMember(folderId, userId),
-      memberData
+      API_ROUTES.folders.members.update(folderId, userId),
+      memberData as unknown as Record<string, unknown>,
     );
     return { success: true, data };
   },
@@ -169,8 +183,11 @@ export const FoldersApi = {
   /**
    * Retirer un membre d'un dossier
    */
-  async removeMember(folderId: number, userId: number): Promise<ApiResponse<void>> {
-    await api.delete(UrlApi.foldersApi.deleteFolderMember(folderId, userId));
+  async removeMember(
+    folderId: number,
+    userId: number,
+  ): Promise<ApiResponse<void>> {
+    await api.delete(API_ROUTES.folders.members.delete(folderId, userId));
     return { success: true, data: undefined };
   },
 
@@ -179,7 +196,7 @@ export const FoldersApi = {
    * Synchronise la structure des dossiers avec le backend
    */
   async syncFolders(): Promise<ApiResponse<{ folders: Folder[] }>> {
-    const data = await api.post<{ folders: Folder[] }>(UrlApi.foldersApi.syncFolders);
+    const data = await api.post<{ folders: Folder[] }>(API_ROUTES.folders.sync);
     return { success: true, data };
   },
 
@@ -188,10 +205,13 @@ export const FoldersApi = {
    * @param folderId - ID du dossier à déplacer
    * @param targetParentId - ID du nouveau parent (null pour la racine)
    */
-  async moveFolder(folderId: number, targetParentId: number | null): Promise<ApiResponse<{ folder: Folder }>> {
+  async moveFolder(
+    folderId: number,
+    targetParentId: number | null,
+  ): Promise<ApiResponse<{ folder: Folder }>> {
     const data = await api.put<{ folder: Folder }>(
-      UrlApi.foldersApi.moveFolder(folderId),
-      { targetParentId }
+      API_ROUTES.folders.move(folderId),
+      { targetParentId },
     );
     return { success: true, data };
   },

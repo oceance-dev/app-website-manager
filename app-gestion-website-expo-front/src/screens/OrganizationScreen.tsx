@@ -5572,25 +5572,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.purple,
   },
-  loadingContainer: {
-    padding: spacing[8],
-    alignItems: 'center',
-    gap: spacing[3],
-  },
-  loadingText: {
-    fontSize: 14,
-    color: colors.gray[600],
-  },
-  emptyState: {
-    padding: spacing[8],
-    alignItems: 'center',
-    gap: spacing[3],
-  },
-  emptyStateText: {
-    fontSize: 16,
-    color: colors.gray[600],
-    textAlign: 'center',
-  },
   // Styles pour la modal de création de type personnalisé
   fieldLabel: {
     fontSize: 15,

@@ -4,8 +4,8 @@ import {
     PaginatedResponse,
     getAuthHeaders,
     handleApiResponse,
-  } from './config';
-import { RegisterCandidatRequest, RegisterCandidatResponse } from './types';
+  } from '../config';
+import { RegisterCandidatRequest, RegisterCandidatResponse } from '@/src/api/types';
 
 
 export class CandidatApi {
@@ -36,13 +36,15 @@ export class CandidatApi {
 
     static async registerCandidat(
         data: RegisterCandidatRequest,
-    ) : Promise<ApiResponse<RegisterCandidatResponse>> {
+        token?: string
+    ): Promise<ApiResponse<RegisterCandidatResponse>> {
         try {
             const response = await fetch(`${this.baseUrl}`, {
                 method: 'POST',
                 headers: getAuthHeaders(token),
                 body: JSON.stringify(data),
             });
+            return handleApiResponse<RegisterCandidatResponse>(response);
         } catch (error) {
             console.error(`Error registering candidat:`, error);
             throw error;

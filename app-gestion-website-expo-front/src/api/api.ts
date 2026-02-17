@@ -5,7 +5,8 @@
  */
 
 // Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3333/api/v1'
+// @ts-ignore - import.meta.env is for Vite, using fallback for Expo
+const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || 'http://localhost:3333/api/v1'
 
 // Types
 export interface ApiError {

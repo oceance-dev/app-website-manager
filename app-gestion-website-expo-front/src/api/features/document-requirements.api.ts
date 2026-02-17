@@ -1,6 +1,6 @@
-import { ApiResponse } from './config';
-import { api } from './apiRequest';
-import { UrlApi } from './url.api';
+import { ApiResponse } from '@/src/api/config';
+import { api } from '@/src/api/apiRequest';
+import { API_ROUTES } from '@/src/api/url.api';
 
 // Types pour les exigences documentaires
 export type RequiredFor = 'all' | 'cadets' | 'candidates' | 'staff';
@@ -109,7 +109,7 @@ export const DocumentRequirementsApi = {
    * Récupérer toutes les exigences documentaires de l'association
    */
   async getAll(): Promise<ApiResponse<GetAllRequirementsResponse>> {
-    const data = await api.get<GetAllRequirementsResponse>(UrlApi.choiceDocumentApi.getAll);
+    const data = await api.get<GetAllRequirementsResponse>(API_ROUTES.documentRequirements.list);
     return { success: true, data };
   },
 
@@ -117,7 +117,7 @@ export const DocumentRequirementsApi = {
    * Récupérer une exigence documentaire par ID
    */
   async get(id: number): Promise<ApiResponse<{ requirement: DocumentRequirement }>> {
-    const data = await api.get<{ requirement: DocumentRequirement }>(UrlApi.choiceDocumentApi.get(id));
+    const data = await api.get<{ requirement: DocumentRequirement }>(API_ROUTES.documentRequirements.get(id));
     return { success: true, data };
   },
 
@@ -126,7 +126,7 @@ export const DocumentRequirementsApi = {
    */
   async create(requirementData: CreateRequirementData): Promise<ApiResponse<{ requirement: DocumentRequirement }>> {
     const data = await api.post<{ requirement: DocumentRequirement }>(
-      UrlApi.choiceDocumentApi.create,
+      API_ROUTES.documentRequirements.create,
       requirementData
     );
     return { success: true, data };
@@ -137,8 +137,8 @@ export const DocumentRequirementsApi = {
    */
   async update(id: number, updateData: UpdateRequirementData): Promise<ApiResponse<{ requirement: DocumentRequirement }>> {
     const data = await api.put<{ requirement: DocumentRequirement }>(
-      UrlApi.choiceDocumentApi.update(id),
-      updateData
+      API_ROUTES.documentRequirements.update(id),
+      updateData as unknown as Record<string, unknown>
     );
     return { success: true, data };
   },
@@ -147,7 +147,7 @@ export const DocumentRequirementsApi = {
    * Supprimer une exigence documentaire
    */
   async delete(id: number): Promise<ApiResponse<void>> {
-    await api.delete(UrlApi.choiceDocumentApi.delete(id));
+    await api.delete(API_ROUTES.documentRequirements.delete(id));
     return { success: true, data: undefined };
   },
 
@@ -155,7 +155,7 @@ export const DocumentRequirementsApi = {
    * Activer/Désactiver une exigence documentaire
    */
   async toggle(id: number): Promise<ApiResponse<{ requirement: DocumentRequirement }>> {
-    const data = await api.post<{ requirement: DocumentRequirement }>(UrlApi.choiceDocumentApi.toggle(id), {});
+    const data = await api.post<{ requirement: DocumentRequirement }>(API_ROUTES.documentRequirements.toggle(id), {});
     return { success: true, data };
   },
 
@@ -164,7 +164,7 @@ export const DocumentRequirementsApi = {
    */
   async reorder(requirementIds: number[]): Promise<ApiResponse<{ requirements: DocumentRequirement[] }>> {
     const data = await api.post<{ requirements: DocumentRequirement[] }>(
-      UrlApi.choiceDocumentApi.reorder,
+      API_ROUTES.documentRequirements.reorder,
       { requirementIds }
     );
     return { success: true, data };
@@ -175,7 +175,7 @@ export const DocumentRequirementsApi = {
    */
   async bulkUpdate(updates: Array<{ id: number; data: UpdateRequirementData }>): Promise<ApiResponse<{ requirements: DocumentRequirement[] }>> {
     const data = await api.post<{ requirements: DocumentRequirement[] }>(
-      UrlApi.choiceDocumentApi.bulkUpdate,
+      API_ROUTES.documentRequirements.bulkUpdate,
       { updates }
     );
     return { success: true, data };
@@ -186,7 +186,7 @@ export const DocumentRequirementsApi = {
    */
   async initialize(): Promise<ApiResponse<{ requirements: DocumentRequirement[] }>> {
     const data = await api.post<{ requirements: DocumentRequirement[] }>(
-      UrlApi.choiceDocumentApi.initialize,
+      API_ROUTES.documentRequirements.initialize,
       {}
     );
     return { success: true, data };
@@ -197,7 +197,7 @@ export const DocumentRequirementsApi = {
    */
   async reset(): Promise<ApiResponse<{ requirements: DocumentRequirement[] }>> {
     const data = await api.post<{ requirements: DocumentRequirement[] }>(
-      UrlApi.choiceDocumentApi.reset,
+      API_ROUTES.documentRequirements.reset,
       {}
     );
     return { success: true, data };
@@ -207,7 +207,7 @@ export const DocumentRequirementsApi = {
    * Récupérer ma complétion de documents
    */
   async getMyCompletion(): Promise<ApiResponse<CompletionCheckResponse>> {
-    const data = await api.get<CompletionCheckResponse>(UrlApi.choiceDocumentApi.myCompletion);
+    const data = await api.get<CompletionCheckResponse>(API_ROUTES.documentRequirements.myCompletion);
     return { success: true, data };
   },
 
@@ -215,7 +215,7 @@ export const DocumentRequirementsApi = {
    * Vérifier la complétion d'un utilisateur
    */
   async checkUserCompletion(userId: number): Promise<ApiResponse<CompletionCheckResponse>> {
-    const data = await api.get<CompletionCheckResponse>(UrlApi.choiceDocumentApi.checkUser(userId));
+    const data = await api.get<CompletionCheckResponse>(API_ROUTES.documentRequirements.checkUser(userId));
     return { success: true, data };
   },
 
@@ -224,7 +224,7 @@ export const DocumentRequirementsApi = {
    */
   async canApprove(userId: number): Promise<ApiResponse<{ canApprove: boolean; reason?: string }>> {
     const data = await api.get<{ canApprove: boolean; reason?: string }>(
-      UrlApi.choiceDocumentApi.canApprove(userId)
+      API_ROUTES.documentRequirements.canApprove(userId)
     );
     return { success: true, data };
   },
@@ -233,7 +233,7 @@ export const DocumentRequirementsApi = {
    * Récupérer les types de documents disponibles
    */
   async getAvailableTypes(): Promise<ApiResponse<{ types: DocumentType[] }>> {
-    const data = await api.get<{ types: DocumentType[] }>(UrlApi.choiceDocumentApi.availableTypes);
+    const data = await api.get<{ types: DocumentType[] }>(API_ROUTES.documentRequirements.availableTypes);
     return { success: true, data };
   },
 };

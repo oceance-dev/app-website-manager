@@ -1,6 +1,6 @@
-import { API_CONFIG, ApiResponse, handleApiResponse, getAuthHeaders, fetchWithTimeout } from './config';
-import { api } from './apiRequest';
-import { UrlApi } from './url.api';
+import { API_CONFIG, ApiResponse, handleApiResponse, getAuthHeaders, fetchWithTimeout } from '../config';
+import { api } from '../apiRequest';
+import { API_ROUTES } from '../url.api';
 
 // Types pour les associations
 export interface Association {
@@ -65,7 +65,7 @@ export const AssociationsApi = {
    * Récupérer toutes les associations (public - pour inscription)
    */
   async getAllPublic(): Promise<ApiResponse<GetAllAssociationsResponse>> {
-    const data = await api.get<GetAllAssociationsResponse>(UrlApi.associationsApi.baseAssociation.getAll, { skipAuth: true });
+    const data = await api.get<GetAllAssociationsResponse>(API_ROUTES.associations.list, { skipAuth: true });
     return { success: true, data };
   },
 
@@ -73,7 +73,7 @@ export const AssociationsApi = {
    * Récupérer les rôles occupés dans une association (public - pour inscription)
    */
   async getOccupiedRoles(associationId: number): Promise<ApiResponse<{ roles: string[] }>> {
-    const data = await api.get<{ roles: string[] }>(UrlApi.associationsApi.baseAssociation.occupiedRole(associationId), { skipAuth: true });
+    const data = await api.get<{ roles: string[] }>(API_ROUTES.associations.occupiedRoles(associationId), { skipAuth: true });
     return { success: true, data };
   },
 
@@ -81,8 +81,8 @@ export const AssociationsApi = {
    * Récupérer toutes les associations (Super Admin)
    */
   async getAll(): Promise<ApiResponse<GetAllAssociationsResponse>> {
-   
-    const data = await api.get<GetAllAssociationsResponse>(UrlApi.associationsApi.staffApp.association.getAll);
+
+    const data = await api.get<GetAllAssociationsResponse>(API_ROUTES.associations.staffApp.list);
     return { success: true, data };
   },
 
@@ -100,7 +100,7 @@ export const AssociationsApi = {
     if (filters?.page) queryParams.append('page', String(filters.page));
     if (filters?.limit) queryParams.append('limit', String(filters.limit));
 
-    const url = `${UrlApi.associationsApi.admin.members.getAll}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const url = `${API_ROUTES.associations.admin.members.list}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     const members = await api.get<GetMembersResponse>(url);
 
     return {
@@ -111,8 +111,8 @@ export const AssociationsApi = {
 
   /**
    * Permet de récupérer les membres en attente de validation
-   * @param filters 
-   * @returns 
+   * @param filters
+   * @returns
    */
   async getMembersPending(
     filters?: { isActive?: boolean; search?: string; page?: number; limit?: number }
@@ -124,11 +124,11 @@ export const AssociationsApi = {
     if (filters?.page) queryParams.append('page', String(filters.page));
     if (filters?.limit) queryParams.append('limit', String(filters.limit));
 
-    const url = `${UrlApi.associationsApi.admin.members.getAll}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const url = `${API_ROUTES.associations.admin.members.list}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     const data = await api.get<GetMembersResponse>(url);
     return { success: true, data };
   },
-  
+
   /**
    * Permet d'approuver un membre d'une association
    * @param id
@@ -136,7 +136,7 @@ export const AssociationsApi = {
    * @returns
    */
   async approveMember(id: number, roleId: number): Promise<ApiResponse<{ member: Member }>> {
-    const data = await api.post<{ member: Member }>(UrlApi.associationsApi.admin.members.approveMember(id), { roleId });
+    const data = await api.post<{ member: Member }>(API_ROUTES.associations.admin.members.approve(id), { roleId });
     return { success: true, data };
   },
 
@@ -147,7 +147,7 @@ export const AssociationsApi = {
    * @returns
    */
   async rejectMember(id: number, reason: string): Promise<ApiResponse<{ member: Member }>> {
-    const data = await api.post<{ member: Member }>(UrlApi.associationsApi.admin.members.rejectMember(id), { reason });
+    const data = await api.post<{ member: Member }>(API_ROUTES.associations.admin.members.reject(id), { reason });
     return { success: true, data };
   },
 
@@ -158,7 +158,7 @@ export const AssociationsApi = {
    * @returns
    */
   async suspendMember(id: number, reason: string): Promise<ApiResponse<{ member: Member }>> {
-    const data = await api.post<{ member: Member }>(UrlApi.associationsApi.admin.members.suspendMember(id), { reason });
+    const data = await api.post<{ member: Member }>(API_ROUTES.associations.admin.members.suspend(id), { reason });
     return { success: true, data };
   },
 
@@ -168,7 +168,7 @@ export const AssociationsApi = {
    * @returns
    */
   async deleteMember(id: number): Promise<ApiResponse<void>> {
-    await api.delete(UrlApi.associationsApi.admin.members.deleteMember(id));
+    await api.delete(API_ROUTES.associations.admin.members.delete(id));
     return { success: true, data: undefined };
   },
 
@@ -176,7 +176,7 @@ export const AssociationsApi = {
    * Récupérer les associations en attente (Super Admin)
    */
   async getPending(): Promise<ApiResponse<GetPendingAssociationsResponse>> {
-    const data = await api.get<GetPendingAssociationsResponse>(UrlApi.associationsApi.staffApp.association.getAll);
+    const data = await api.get<GetPendingAssociationsResponse>(API_ROUTES.associations.staffApp.list);
     return { success: true, data };
   },
 
@@ -184,7 +184,7 @@ export const AssociationsApi = {
    * Récupérer les détails d'une association (Super Admin)
    */
   async getById(id: number): Promise<ApiResponse<{ association: AssociationWithStats }>> {
-    const data = await api.get<{ association: AssociationWithStats }>(UrlApi.associationsApi.admin.association.get(id));
+    const data = await api.get<{ association: AssociationWithStats }>(API_ROUTES.associations.admin.get(id));
     return { success: true, data };
   },
 
@@ -195,7 +195,7 @@ export const AssociationsApi = {
     id: number,
     data: Partial<Association>
   ): Promise<ApiResponse<{ association: Association }>> {
-    const result = await api.put<{ association: Association }>(UrlApi.associationsApi.admin.association.update(id), data);
+    const result = await api.put<{ association: Association }>(API_ROUTES.associations.admin.update(id), data);
     return { success: true, data: result };
   },
 
@@ -203,7 +203,7 @@ export const AssociationsApi = {
    * Approuver une association (Super Admin)
    */
   async approve(id: number): Promise<ApiResponse<{ association: Association }>> {
-    const data = await api.post<{ association: Association }>(UrlApi.associationsApi.staffApp.association.approve(id));
+    const data = await api.post<{ association: Association }>(API_ROUTES.associations.staffApp.approve(id));
     return { success: true, data };
   },
 
@@ -211,7 +211,7 @@ export const AssociationsApi = {
    * Rejeter une association (Super Admin)
    */
   async reject(id: number, reason: string): Promise<ApiResponse<{ association: Association }>> {
-    const data = await api.post<{ association: Association }>(UrlApi.associationsApi.staffApp.association.reject(id), { reason });
+    const data = await api.post<{ association: Association }>(API_ROUTES.associations.staffApp.reject(id), { reason });
     return { success: true, data };
   },
 
@@ -219,7 +219,7 @@ export const AssociationsApi = {
    * Suspendre une association (Super Admin)
    */
   async suspend(id: number, reason: string): Promise<ApiResponse<{ association: Association }>> {
-    const data = await api.post<{ association: Association }>(UrlApi.associationsApi.staffApp.association.suspend(id), { reason });
+    const data = await api.post<{ association: Association }>(API_ROUTES.associations.staffApp.suspend(id), { reason });
     return { success: true, data };
   },
 
@@ -227,7 +227,7 @@ export const AssociationsApi = {
    * Réactiver une association (Super Admin)
    */
   async reactivate(id: number): Promise<ApiResponse<{ association: Association }>> {
-    const data = await api.post<{ association: Association }>(UrlApi.associationsApi.staffApp.association.reactived(id));
+    const data = await api.post<{ association: Association }>(API_ROUTES.associations.staffApp.reactivate(id));
     return { success: true, data };
   },
 
@@ -235,7 +235,7 @@ export const AssociationsApi = {
    * Prolonger l'abonnement d'une association (Super Admin)
    */
   async extendSubscription(id: number, months: number): Promise<ApiResponse<{ association: Association }>> {
-    const data = await api.post<{ association: Association }>(UrlApi.associationsApi.admin.association.extendSubscription(id), { months });
+    const data = await api.post<{ association: Association }>(API_ROUTES.associations.admin.extendSubscription(id), { months });
     return { success: true, data };
   },
 
@@ -243,7 +243,7 @@ export const AssociationsApi = {
    * Récupérer les statistiques de mon association
    */
   async getMyStats(): Promise<ApiResponse<{ stats: AssociationStats }>> {
-    const data = await api.get<{ stats: AssociationStats }>(UrlApi.associationsApi.admin.association.getStats);
+    const data = await api.get<{ stats: AssociationStats }>(API_ROUTES.associations.admin.stats);
     return { success: true, data };
   },
 };

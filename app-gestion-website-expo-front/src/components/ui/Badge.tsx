@@ -1,8 +1,17 @@
 import React from 'react';
 import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
-import { colors, spacing, borderRadius, fontSizes, fontWeights } from '../../theme';
+import { colors, borderRadius } from '../../theme';
 
-type BadgeVariant = 'active' | 'pending' | 'inactive';
+type BadgeVariant =
+  | 'active'
+  | 'pending'
+  | 'inactive'
+  | 'success'
+  | 'warning'
+  | 'error'
+  | 'info'
+  | 'default';
+
 type RoleVariant = 'admin' | 'supervisor' | 'cadet';
 
 interface BadgeProps {
@@ -13,52 +22,38 @@ interface BadgeProps {
   textStyle?: TextStyle;
 }
 
+const variantStyles: Record<BadgeVariant, { bg: string; text: string }> = {
+  active: { bg: colors.successLight, text: colors.success },
+  success: { bg: colors.successLight, text: colors.successDark },
+  pending: { bg: colors.warningLight, text: colors.warningDark },
+  warning: { bg: colors.warningLight, text: colors.warningDark },
+  inactive: { bg: colors.muted, text: colors.mutedForeground },
+  error: { bg: colors.errorLight, text: colors.errorDark },
+  info: { bg: colors.infoLight, text: colors.infoDark },
+  default: { bg: colors.gray[100], text: colors.gray[700] },
+};
+
+const roleStyles: Record<RoleVariant, { bg: string; text: string }> = {
+  admin: { bg: colors.role.admin.background, text: colors.role.admin.text },
+  supervisor: { bg: colors.role.supervisor.background, text: colors.role.supervisor.text },
+  cadet: { bg: colors.role.cadet.background, text: colors.role.cadet.text },
+};
+
 export function Badge({ children, variant, role, style, textStyle }: BadgeProps) {
   const getStyles = () => {
-    if (role) {
-      switch (role) {
-        case 'admin':
-          return {
-            container: { backgroundColor: colors.role.admin.background },
-            text: { color: colors.role.admin.text },
-          };
-        case 'supervisor':
-          return {
-            container: { backgroundColor: colors.role.supervisor.background },
-            text: { color: colors.role.supervisor.text },
-          };
-        case 'cadet':
-          return {
-            container: { backgroundColor: colors.role.cadet.background },
-            text: { color: colors.role.cadet.text },
-          };
-      }
+    if (role && roleStyles[role]) {
+      return {
+        container: { backgroundColor: roleStyles[role].bg },
+        text: { color: roleStyles[role].text },
+      };
     }
 
-    if (variant) {
-      switch (variant) {
-        case 'active':
-          return {
-            container: { backgroundColor: colors.badge.active.background },
-            text: { color: colors.badge.active.text },
-          };
-        case 'pending':
-          return {
-            container: { backgroundColor: colors.badge.pending.background },
-            text: { color: colors.badge.pending.text },
-          };
-        case 'inactive':
-          return {
-            container: { backgroundColor: colors.badge.inactive.background },
-            text: { color: colors.badge.inactive.text },
-          };
-      }
-    }
+    const variantKey = variant || 'default';
+    const variantStyle = variantStyles[variantKey] || variantStyles.default;
 
-    // Default
     return {
-      container: { backgroundColor: colors.gray[100] },
-      text: { color: colors.gray[700] },
+      container: { backgroundColor: variantStyle.bg },
+      text: { color: variantStyle.text },
     };
   };
 

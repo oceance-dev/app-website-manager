@@ -3,14 +3,21 @@ import {
   ApiResponse,
   getAuthHeaders,
   handleApiResponse,
-} from './config';
+} from '@/src/api/config';
 import {
   RegisterCandidatRequest,
   RegisterCandidatResponse,
   GetAllCandidatsResponse,
-} from './types/candidat';
-import { api } from './apiRequest';
-import { UrlApi } from './url.api';
+} from '@/src/api/types';
+import { api } from '@/src/api/apiRequest';
+import { API_ROUTES } from '@/src/api/url.api';
+
+// Ré-export des types pour usage externe
+export type {
+  RegisterCandidatRequest,
+  RegisterCandidatResponse,
+  GetAllCandidatsResponse,
+};
 
 /**
  * Service API pour l'inscription des candidats (futurs cadets)
@@ -68,7 +75,7 @@ export class CandidatsApi {
   static async getAllCandidatures(): Promise<ApiResponse<{ candidatures: any[] }>> {
     try {
       const response = await api.get<{ candidats: any[]; meta?: any }>(
-        UrlApi.associationsApi.admin.candidatures.getAll
+        API_ROUTES.associations.admin.candidatures.list
       );
 
       // L'API retourne "candidats", on renomme en "candidatures" pour l'interface
@@ -140,7 +147,7 @@ export class CandidatsApi {
   ): Promise<ApiResponse<{ message: string; cadetId: number }>> {
     try {
       const data = await api.post<{ message: string; cadetId: number }>(
-        UrlApi.associationsApi.admin.candidatures.validate(id)
+        API_ROUTES.associations.admin.candidatures.validate(id)
       );
       return { success: true, data };
     } catch (error) {
@@ -187,7 +194,7 @@ export class CandidatsApi {
   ): Promise<ApiResponse<{ message: string }>> {
     try {
       const data = await api.post<{ message: string }>(
-        UrlApi.associationsApi.admin.candidatures.reject(id),
+        API_ROUTES.associations.admin.candidatures.reject(id),
         { reason }
       );
       return { success: true, data };
@@ -203,7 +210,7 @@ export class CandidatsApi {
   static async getDocumentRequirements(): Promise<ApiResponse<{ requirements: any[] }>> {
     try {
       const data = await api.get<{ requirements: any[] }>(
-        UrlApi.candidatsApi.docRequirements
+        API_ROUTES.candidats.docRequirements
       );
       return { success: true, data };
     } catch (error) {
@@ -217,7 +224,7 @@ export class CandidatsApi {
    */
   static async getCompletion(): Promise<ApiResponse<any>> {
     try {
-      const data = await api.get<any>(UrlApi.candidatsApi.completion);
+      const data = await api.get<any>(API_ROUTES.candidats.completion);
       return { success: true, data };
     } catch (error) {
       console.error('Error fetching completion:', error);
@@ -231,7 +238,7 @@ export class CandidatsApi {
   static async canSubmit(): Promise<ApiResponse<{ canSubmit: boolean; reason?: string; missingDocuments?: string[] }>> {
     try {
       const data = await api.get<{ canSubmit: boolean; reason?: string; missingDocuments?: string[] }>(
-        UrlApi.candidatsApi.canSubmit
+        API_ROUTES.candidats.canSubmit
       );
       return { success: true, data };
     } catch (error) {
@@ -246,7 +253,7 @@ export class CandidatsApi {
   static async getMyDocuments(): Promise<ApiResponse<{ documents: any[] }>> {
     try {
       const data = await api.get<{ documents: any[] }>(
-        UrlApi.candidatsApi.getMyDocuments
+        API_ROUTES.candidats.documents.list
       );
       return { success: true, data };
     } catch (error) {
@@ -262,7 +269,7 @@ export class CandidatsApi {
   static async getCandidatDocuments(candidatId: number | string): Promise<ApiResponse<{ documents: any[] }>> {
     try {
       const data = await api.get<{ documents: any[] }>(
-        `${UrlApi.candidatsApi.getMyDocuments}?userId=${candidatId}`
+        `${API_ROUTES.candidats.documents.list}?userId=${candidatId}`
       );
       return { success: true, data };
     } catch (error) {
@@ -279,7 +286,7 @@ export class CandidatsApi {
       // Ne pas passer d'options headers - apiRequest.ts gère automatiquement FormData
       // et n'ajoute pas Content-Type pour laisser le navigateur définir la boundary
       const data = await api.post<{ document: any }>(
-        UrlApi.candidatsApi.uploadDocument,
+        API_ROUTES.candidats.documents.upload,
         formData
       );
       return { success: true, data };
@@ -296,7 +303,7 @@ export class CandidatsApi {
   static async downloadDocument(documentId: number | string): Promise<ApiResponse<Blob>> {
     try {
       const data = await api.get<Blob>(
-        UrlApi.candidatsApi.downloadDocument(documentId)
+        API_ROUTES.candidats.documents.download(documentId)
       );
       return { success: true, data };
     } catch (error) {
@@ -312,7 +319,7 @@ export class CandidatsApi {
   static async deleteDocument(documentId: number | string): Promise<ApiResponse<{ message: string }>> {
     try {
       const data = await api.delete<{ message: string }>(
-        UrlApi.candidatsApi.deleteDocument(documentId)
+        API_ROUTES.candidats.documents.delete(documentId)
       );
       return { success: true, data };
     } catch (error) {
@@ -328,7 +335,7 @@ export class CandidatsApi {
   static async getDocument(documentId: number | string): Promise<ApiResponse<any>> {
     try {
       const data = await api.get<any>(
-        UrlApi.candidatsApi.getDocument(documentId)
+        API_ROUTES.candidats.documents.view(documentId)
       );
       return { success: true, data };
     } catch (error) {
@@ -345,7 +352,7 @@ export class CandidatsApi {
   static async replaceDocument(documentId: number | string, formData: FormData): Promise<ApiResponse<{ document: any }>> {
     try {
       const data = await api.put<{ document: any }>(
-        UrlApi.candidatsApi.replaceDocument(documentId),
+        API_ROUTES.candidats.documents.replace(documentId),
         formData
       );
       return { success: true, data };

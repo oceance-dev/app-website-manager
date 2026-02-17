@@ -1,6 +1,6 @@
-import { api } from './apiRequest';
-import { API_CONFIG, ApiError, ApiResponse, handleApiResponse, fetchWithTimeout } from './config';
-import { UrlApi } from './url.api';
+import { api } from '../apiRequest';
+import { API_CONFIG, ApiError, ApiResponse, handleApiResponse, fetchWithTimeout } from '../config';
+import { API_ROUTES } from '../url.api';
 
 // Types pour l'authentification
 export interface RegisterAssociationData {
@@ -207,7 +207,7 @@ export const AuthApi = {
    * Connexion
    */
   async login(loginData: LoginData): Promise<ApiResponse<LoginResponse>> {
-    const data = await api.post<LoginResponse>(UrlApi.authApi.login, loginData, { skipAuth: true });
+    const data = await api.post<LoginResponse>(API_ROUTES.auth.login, loginData, { skipAuth: true });
     return { success: true, data };
   },
 
@@ -215,7 +215,7 @@ export const AuthApi = {
    * Rafraîchir les tokens
    */
   async refreshToken(refreshToken: string): Promise<ApiResponse<LoginResponse>> {
-    const data = await api.post<LoginResponse>(UrlApi.authApi.refresh, { refreshToken });
+    const data = await api.post<LoginResponse>(API_ROUTES.auth.refresh, { refreshToken });
     return { success: true, data };
   },
 
@@ -223,7 +223,7 @@ export const AuthApi = {
    * Récupérer l'utilisateur connecté
    */
   async getMe(): Promise<ApiResponse<{ user: AuthUser; association: AuthAssociation | null }>> {
-    const data = await api.get<{ user: AuthUser; association: AuthAssociation | null }>(UrlApi.authApi.me);
+    const data = await api.get<{ user: AuthUser; association: AuthAssociation | null }>(API_ROUTES.auth.me);
     return { success: true, data };
   },
 
@@ -231,7 +231,7 @@ export const AuthApi = {
    * Déconnexion
    */
   async logout(refreshToken: string): Promise<ApiResponse<void>> {
-    const data = await api.post<void>(UrlApi.authApi.logout, { refreshToken });
+    const data = await api.post<void>(API_ROUTES.auth.logout, { refreshToken });
     return { success: true, data };
   },
 
@@ -239,7 +239,7 @@ export const AuthApi = {
    * Déconnexion de tous les appareils
    */
   async logoutAll(): Promise<ApiResponse<void>> {
-    const data = await api.post<void>(UrlApi.authApi.logoutAll);
+    const data = await api.post<void>(API_ROUTES.auth.logoutAll);
     return { success: true, data };
   },
 };

@@ -1,6 +1,6 @@
-import { ApiResponse, API_CONFIG } from './config';
-import { api } from './apiRequest';
-import { UrlApi } from './url.api';
+import { ApiResponse, API_CONFIG } from '@/src/api/config';
+import { api } from '@/src/api/apiRequest';
+import { API_ROUTES } from '@/src/api/url.api';
 
 // Types pour les documents
 export interface Document {
@@ -96,26 +96,26 @@ export const DocumentsApi = {
    * Récupérer tous les documents
    */
   async getAll(): Promise<ApiResponse<GetAllDocumentsResponse>> {
-    const data = await api.get<GetAllDocumentsResponse>(UrlApi.documentsApi.getAll);
+    const data = await api.get<GetAllDocumentsResponse>(API_ROUTES.documents.list);
     return { success: true, data };
   },
 
   async getAllDocumentsByCandidat(candidatId: number): Promise<ApiResponse<GetAllDocumentsResponse>> {
-    const data = await api.get<GetAllDocumentsResponse>(UrlApi.documentsApi.getAll);
+    const data = await api.get<GetAllDocumentsResponse>(API_ROUTES.documents.list);
 
     data.documents.filter((document: Document) => document.userId === candidatId);
-    
+
     return {
       success: true,
       data: data,
-    } 
+    }
   },
 
   /**
    * Voir un document par ID (avec URL de téléchargement)
    */
   async viewDocument(id: number): Promise<ApiResponse<{ document: DocumentWithDownloadUrl }>> {
-    const data = await api.get<{ document: DocumentWithDownloadUrl }>(UrlApi.documentsApi.viewDocument(id));
+    const data = await api.get<{ document: DocumentWithDownloadUrl }>(API_ROUTES.documents.view(id));
     return { success: true, data };
   },
 
@@ -149,8 +149,8 @@ export const DocumentsApi = {
 
     // Ne pas définir Content-Type pour FormData - le navigateur le gère automatiquement avec boundary
     const data = await api.post<{ document: Document }>(
-      UrlApi.documentsApi.create,
-      formData
+      API_ROUTES.documents.upload,
+      formData as unknown as Record<string, unknown>
     );
     return { success: true, data };
   },
@@ -160,7 +160,7 @@ export const DocumentsApi = {
    * Retourne l'URL complète pour télécharger le fichier
    */
   downloadDocument(id: number): string {
-    const path = UrlApi.documentsApi.downloadDocument(id);
+    const path = API_ROUTES.documents.download(id);
     return `${API_CONFIG.BASE_URL}${path}`;
   },
 
@@ -178,7 +178,7 @@ export const DocumentsApi = {
     }
   ): Promise<ApiResponse<{ document: Document }>> {
     const data = await api.put<{ document: Document }>(
-      UrlApi.documentsApi.updateDocument(id),
+      API_ROUTES.documents.update(id),
       updateData
     );
     return { success: true, data };
@@ -218,8 +218,8 @@ export const DocumentsApi = {
     }
 
     const data = await api.put<{ document: Document }>(
-      UrlApi.documentsApi.updateDocument(id),
-      formData
+      API_ROUTES.documents.update(id),
+      formData as unknown as Record<string, unknown>
     );
     return { success: true, data };
   },
@@ -228,7 +228,7 @@ export const DocumentsApi = {
    * Supprimer un document
    */
   async deleteDocument(id: number): Promise<ApiResponse<void>> {
-    await api.delete(UrlApi.documentsApi.deleteDocument(id));
+    await api.delete(API_ROUTES.documents.delete(id));
     return { success: true, data: undefined };
   },
 
@@ -242,7 +242,7 @@ export const DocumentsApi = {
    * Récupérer tous les types de documents (globaux + personnalisés)
    */
   async getAllTypes(): Promise<ApiResponse<{ types: DocumentType[] }>> {
-    const data = await api.get<{ types: DocumentType[] }>(UrlApi.documentsApi.getAllTypes);
+    const data = await api.get<{ types: DocumentType[] }>(API_ROUTES.documents.types.list);
     return { success: true, data };
   },
 
@@ -250,7 +250,7 @@ export const DocumentsApi = {
    * Récupérer uniquement les types personnalisés de l'association
    */
   async getCustomTypes(): Promise<ApiResponse<{ types: DocumentType[] }>> {
-    const data = await api.get<{ types: DocumentType[] }>(UrlApi.documentsApi.getCustomTypes);
+    const data = await api.get<{ types: DocumentType[] }>(API_ROUTES.documents.types.listCustom);
     return { success: true, data };
   },
 
@@ -259,8 +259,8 @@ export const DocumentsApi = {
    */
   async createType(typeData: CreateDocumentTypeData): Promise<ApiResponse<{ type: DocumentType }>> {
     const data = await api.post<{ type: DocumentType }>(
-      UrlApi.documentsApi.createType,
-      typeData
+      API_ROUTES.documents.types.create,
+      typeData as unknown as Record<string, unknown>
     );
     return { success: true, data };
   },
@@ -270,8 +270,8 @@ export const DocumentsApi = {
    */
   async updateType(id: number, typeData: UpdateDocumentTypeData): Promise<ApiResponse<{ type: DocumentType }>> {
     const data = await api.put<{ type: DocumentType }>(
-      UrlApi.documentsApi.updateType(id),
-      typeData
+      API_ROUTES.documents.types.update(id),
+      typeData as unknown as Record<string, unknown>
     );
     return { success: true, data };
   },
@@ -280,7 +280,7 @@ export const DocumentsApi = {
    * Supprimer un type de document personnalisé
    */
   async deleteType(id: number): Promise<ApiResponse<void>> {
-    await api.delete(UrlApi.documentsApi.deleteType(id));
+    await api.delete(API_ROUTES.documents.types.delete(id));
     return { success: true, data: undefined };
   },
 };

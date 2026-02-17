@@ -48,10 +48,23 @@ export default function LoginScreen({ onLogin, onNavigateToSign, onNavigateToOrg
 
       if (response.success && response.data) {
         // Stocker les tokens avec tokenStorage
+        // Les tokens peuvent être des objets {value, expiresAt} ou des strings directes
+        const accessToken = typeof response.data.accessToken === 'object'
+          ? response.data.accessToken.value
+          : response.data.accessToken;
+        const refreshToken = typeof response.data.refreshToken === 'object'
+          ? response.data.refreshToken.value
+          : response.data.refreshToken;
+        const expiresAt = typeof response.data.accessToken === 'object'
+          ? response.data.accessToken.expiresAt
+          : null;
+
+        console.log('🔐 Storing tokens:', { accessToken: accessToken?.substring(0, 20) + '...', refreshToken: refreshToken?.substring(0, 20) + '...' });
+
         await tokenStorage.setTokens({
-          accessToken: response.data.accessToken,
-          refreshToken: response.data.refreshToken,
-          expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1h
+          accessToken,
+          refreshToken,
+          expiresAt: expiresAt || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
         });
 
         // Créer l'objet user

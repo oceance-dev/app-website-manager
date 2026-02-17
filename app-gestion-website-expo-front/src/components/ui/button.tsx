@@ -1,197 +1,83 @@
-import * as React from "react";
-import { TouchableOpacity, Text, ActivityIndicator, StyleSheet, ViewStyle, TextStyle } from "react-native";
-import { colors, spacing, borderRadius, shadows } from '../../theme';
+import React from "react";
+import {
+  TouchableOpacity,
+  StyleSheet,
+  ViewStyle,
+  TextStyle,
+} from "react-native";
+import { Text } from "dripsy";
+import { colors, spacing, borderRadius } from "@/src/theme";
+import { LucideIcon } from "lucide-react-native";
 
-export interface ButtonProps
-  extends React.ComponentPropsWithoutRef<typeof TouchableOpacity> {
-  children?: React.ReactNode;
-  isLoading?: boolean;
-  variant?: "default" | "primary" | "secondary" | "destructive" | "outline" | "ghost" | "hero";
-  size?: "default" | "sm" | "lg" | "icon";
+export type ButtonVariant = "primary" | "secondary" | "destructive" | "success" | "outline" | "ghost" | "default";
+
+export interface ButtonProps {
+  children: React.ReactNode;
+  onPress: () => void;
+  variant?: ButtonVariant;
+  icon?: LucideIcon;
+  disabled?: boolean;
+  style?: ViewStyle;
+  className?: string;
 }
 
-const Button = React.forwardRef<
-  React.ElementRef<typeof TouchableOpacity>,
-  ButtonProps
->(({ style, variant = "default", size = "default", children, isLoading, disabled, ...props }, ref) => {
+const variantStyles: Record<ButtonVariant, { bg: string; text: string; border?: string }> = {
+  primary: { bg: colors.navy, text: colors.white },
+  secondary: { bg: colors.muted, text: colors.foreground },
+  destructive: { bg: colors.error, text: colors.white },
+  success: { bg: colors.success, text: colors.white },
+  outline: { bg: "transparent", text: colors.navy, border: colors.navy },
+  ghost: { bg: "transparent", text: colors.mutedForeground },
+  default: { bg: colors.navy, text: colors.white },
+};
 
-  const getButtonStyle = (): ViewStyle => {
-    const baseStyle: ViewStyle = {
-      ...styles.base,
-      ...styles[`size_${size}`],
-    };
-
-    switch (variant) {
-      case "primary":
-        return { ...baseStyle, ...styles.primary };
-      case "default":
-        return { ...baseStyle, ...styles.primary };
-      case "secondary":
-        return { ...baseStyle, ...styles.secondary };
-      case "destructive":
-        return { ...baseStyle, ...styles.destructive };
-      case "outline":
-        return { ...baseStyle, ...styles.outline };
-      case "ghost":
-        return { ...baseStyle, ...styles.ghost };
-      case "hero":
-        return { ...baseStyle, ...styles.hero };
-      default:
-        return baseStyle;
-    }
-  };
-
-  const getTextStyle = (): TextStyle => {
-    const baseTextStyle: TextStyle = {
-      ...styles.text_base,
-      ...styles[`text_${size}`],
-    };
-
-    switch (variant) {
-      case "primary":
-        return { ...baseTextStyle, ...styles.text_primary };
-      case "default":
-        return { ...baseTextStyle, ...styles.text_primary };
-      case "secondary":
-        return { ...baseTextStyle, ...styles.text_secondary };
-      case "destructive":
-        return { ...baseTextStyle, ...styles.text_destructive };
-      case "outline":
-        return { ...baseTextStyle, ...styles.text_outline };
-      case "ghost":
-        return { ...baseTextStyle, ...styles.text_ghost };
-      case "hero":
-        return { ...baseTextStyle, ...styles.text_hero };
-      default:
-        return baseTextStyle;
-    }
-  };
+export const Button = ({
+  children,
+  onPress,
+  variant = "primary",
+  icon: Icon,
+  disabled = false,
+  style,
+}: ButtonProps) => {
+  const vs = variantStyles[variant];
 
   return (
     <TouchableOpacity
-      ref={ref}
       style={[
-        getButtonStyle(),
-        (disabled || isLoading) && styles.disabled,
-        style
+        styles.button,
+        { backgroundColor: vs.bg },
+        vs.border ? { borderWidth: 1, borderColor: vs.border } : undefined,
+        disabled && styles.disabled,
+        style,
       ]}
-      disabled={disabled || isLoading}
+      onPress={onPress}
+      disabled={disabled}
       activeOpacity={0.7}
-      {...props}
     >
-      {isLoading ? (
-        <ActivityIndicator
-          color={variant === "outline" || variant === "ghost" ? colors.navy : colors.white}
-          size="small"
-        />
-      ) : typeof children === "string" ? (
-        <Text style={getTextStyle()}>{children}</Text>
-      ) : (
-        children
-      )}
+      {Icon && <Icon size={18} color={vs.text} style={styles.icon} />}
+      <Text style={[styles.text, { color: vs.text }]}>{children}</Text>
     </TouchableOpacity>
   );
-});
-
-Button.displayName = "Button";
+};
 
 const styles = StyleSheet.create({
-  base: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    borderRadius: borderRadius.lg,
-  },
-
-  // Sizes
-  size_default: {
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-  },
-  size_sm: {
+  button: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    minHeight: 44,
   },
-  size_lg: {
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xxl,
-  },
-  size_icon: {
-    width: 40,
-    height: 40,
-    paddingHorizontal: 0,
-    paddingVertical: 0,
-  },
-
-  // Variants
-  primary: {
-    backgroundColor: colors.navy,
-  },
-  secondary: {
-    backgroundColor: colors.muted,
-  },
-  outline: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  ghost: {
-    backgroundColor: 'transparent',
-  },
-  destructive: {
-    backgroundColor: colors.error,
-  },
-  hero: {
-    backgroundColor: colors.gold,
-    borderRadius: borderRadius['2xl'],
-    ...shadows.gold,
-  },
-
-  // Text styles base
-  text_base: {
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-
-  // Text sizes
-  text_default: {
+  text: {
     fontSize: 14,
+    fontWeight: "600",
   },
-  text_sm: {
-    fontSize: 14,
+  icon: {
+    marginRight: spacing.xs,
   },
-  text_lg: {
-    fontSize: 16,
-  },
-  text_icon: {
-    fontSize: 14,
-  },
-
-  // Text variants
-  text_primary: {
-    color: colors.white,
-  },
-  text_secondary: {
-    color: colors.foreground,
-  },
-  text_outline: {
-    color: colors.foreground,
-  },
-  text_ghost: {
-    color: colors.mutedForeground,
-  },
-  text_destructive: {
-    color: colors.white,
-  },
-  text_hero: {
-    color: colors.navyDark,
-    fontWeight: '700',
-  },
-
   disabled: {
     opacity: 0.5,
   },
 });
-
-export { Button };

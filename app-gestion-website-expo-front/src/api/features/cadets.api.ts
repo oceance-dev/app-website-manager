@@ -4,7 +4,7 @@ import {
   PaginatedResponse,
   getAuthHeaders,
   handleApiResponse,
-} from './config';
+} from '@/src/api/config';
 import {
   CadetResponse,
   GetAllCadetsResponse,
@@ -12,7 +12,17 @@ import {
   UpdateCadetRoleRequest,
   UpdateCadetRoleResponse,
   CadetsFilterParams,
-} from './types';
+} from '@/src/api/types';
+
+// Ré-export des types pour usage externe
+export type {
+  CadetResponse,
+  GetAllCadetsResponse,
+  GetCadetByIdResponse,
+  UpdateCadetRoleRequest,
+  UpdateCadetRoleResponse,
+  CadetsFilterParams,
+};
 
 /**
  * Service API pour la gestion des cadets

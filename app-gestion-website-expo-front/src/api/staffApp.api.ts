@@ -1,6 +1,6 @@
 import { ApiResponse } from './config';
 import { api } from './apiRequest';
-import { UrlApi } from './url.api';
+import { API_ROUTES } from './url.api';
 import { Role, Permission, RoleWithPermissions } from './roles.api';
 
 // Types pour StaffApp
@@ -36,7 +36,10 @@ export const StaffAppApi = {
    * Créer un nouveau rôle (Super Admin)
    */
   async createRole(roleData: CreateRoleData): Promise<ApiResponse<{ role: Role }>> {
-    const data = await api.post<{ role: Role }>(UrlApi.staffAppApi.postRoles, roleData);
+    const data = await api.post<{ role: Role }>(
+      API_ROUTES.staffApp.roles.create,
+      roleData as unknown as Record<string, unknown>
+    );
     return { success: true, data };
   },
 
@@ -44,7 +47,10 @@ export const StaffAppApi = {
    * Mettre à jour un rôle (Super Admin)
    */
   async updateRole(id: number, roleData: UpdateRoleData): Promise<ApiResponse<{ role: Role }>> {
-    const data = await api.put<{ role: Role }>(UrlApi.staffAppApi.updateRoles(id), roleData);
+    const data = await api.put<{ role: Role }>(
+      API_ROUTES.staffApp.roles.update(id),
+      roleData as unknown as Record<string, unknown>
+    );
     return { success: true, data };
   },
 
@@ -52,7 +58,7 @@ export const StaffAppApi = {
    * Supprimer un rôle (Super Admin)
    */
   async deleteRole(id: number): Promise<ApiResponse<void>> {
-    await api.delete(UrlApi.staffAppApi.deleteRoles(id));
+    await api.delete(API_ROUTES.staffApp.roles.delete(id));
     return { success: true, data: undefined };
   },
 
@@ -64,8 +70,8 @@ export const StaffAppApi = {
     permissionsData: UpdatePermissionsData
   ): Promise<ApiResponse<{ role: RoleWithPermissions }>> {
     const data = await api.put<{ role: RoleWithPermissions }>(
-      UrlApi.staffAppApi.updatePermissions(id),
-      permissionsData
+      API_ROUTES.staffApp.roles.updatePermissions(id),
+      permissionsData as unknown as Record<string, unknown>
     );
     return { success: true, data };
   },
@@ -74,7 +80,9 @@ export const StaffAppApi = {
    * Récupérer les utilisateurs ayant un rôle spécifique (Super Admin)
    */
   async getUsersByRole(roleId: number): Promise<ApiResponse<{ users: UserWithRole[] }>> {
-    const data = await api.get<{ users: UserWithRole[] }>(UrlApi.staffAppApi.getUserRole(roleId));
+    const data = await api.get<{ users: UserWithRole[] }>(
+      API_ROUTES.staffApp.roles.getUserRole(roleId)
+    );
     return { success: true, data };
   },
 };

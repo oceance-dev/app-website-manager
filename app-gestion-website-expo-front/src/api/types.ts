@@ -102,3 +102,57 @@ export interface DocumentsFilterParams extends PaginationParams {
   uploadedBy?: number;
   search?: string;
 }
+
+// ============================================
+// Types pour les réponses API - Cadets
+// ============================================
+
+export interface CadetResponse {
+  id: number | string;
+  firstname: string;
+  lastname: string;
+  email: string;
+  phone?: string;
+  dateOfBirth?: string;
+  role: 'Cadet' | 'Cadet Breveté' | 'Ancien Cadet';
+  status?: 'Actif' | 'Inactif' | 'En attente';
+  sexe?: number;
+  courseAccess?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface GetAllCadetsResponse {
+  cadets: CadetResponse[];
+  total: number;
+  page?: number;
+  limit?: number;
+}
+
+export interface GetCadetByIdResponse {
+  cadet: CadetResponse;
+}
+
+export interface UpdateCadetRoleRequest {
+  role: 'Cadet' | 'Cadet Breveté' | 'Ancien Cadet';
+}
+
+export interface UpdateCadetRoleResponse {
+  cadet: CadetResponse;
+  message: string;
+}
+
+export interface CadetsFilterParams extends PaginationParams {
+  role?: 'Cadet' | 'Cadet Breveté' | 'Ancien Cadet';
+  statut?: 'Actif' | 'Inactif' | 'En attente';
+  search?: string;
+}
+
+// ============================================
+// Types pour les réponses API - Candidats
+// ============================================
+
+export interface GetAllCandidatsResponse {
+  candidats: RegisterCandidatRequest[];
+  total: number;
+}

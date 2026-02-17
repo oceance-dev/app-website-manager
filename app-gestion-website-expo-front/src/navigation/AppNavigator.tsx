@@ -1,21 +1,29 @@
-import React from 'react';
-import { View, StyleSheet, Animated, TouchableOpacity, Platform, Easing, PanResponder } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import DashboardScreen from '../screens/DashboardScreen';
-import SuperAdminDashboardScreen from '../screens/SuperAdminDashboardScreen';
-import DocumentsScreen from '../screens/DocumentsScreen';
-import SettingsScreen from '../screens/SettingsScreen';
-import OrganizationScreen from '../screens/OrganizationScreen';
-import CoursesScreen from '../screens/CoursesScreen';
-import CandidatDocumentsScreen from '../screens/CandidatDocumentsScreen';
-import PendingMembersScreen from '../screens/PendingMembersScreen';
-import Sidebar from '../components/layout/Sidebar';
-import Header from '../components/layout/Header';
-import { RootStackParamList, User } from '../types';
-import { menuItems } from '../data/mockData';
-import { isWeb, isLargeScreen } from '../utils/responsive';
-import { getRoleDisplayName, getRoleName, hasRole } from '../utils/roleUtils';
+import React from "react";
+import {
+  View,
+  StyleSheet,
+  Animated,
+  TouchableOpacity,
+  Platform,
+  Easing,
+  PanResponder,
+} from "react-native";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import DashboardScreen from "../screens/DashboardScreen";
+import SuperAdminDashboardScreen from "../screens/SuperAdminDashboardScreen";
+import DocumentsScreen from "../screens/DocumentsScreen";
+import SettingsScreen from "../screens/SettingsScreen";
+import OrganizationNewScreen from "../screens/OrganizationNewScreen";
+import CoursesScreen from "../screens/CoursesScreen";
+import CandidatDocumentsScreen from "../screens/CandidatDocumentsScreen";
+import PendingMembersScreen from "../screens/PendingMembersScreen";
+import Sidebar from "../components/layout/Sidebar";
+import Header from "../components/layout/Header";
+import { RootStackParamList, User } from "../types";
+import { menuItems } from "../data/mockData";
+import { isWeb, isLargeScreen } from "../utils/responsive";
+import { getRoleDisplayName, getRoleName, hasRole } from "../utils/roleUtils";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -24,12 +32,17 @@ interface AppNavigatorProps {
   currentUser: User | null;
 }
 
-export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProps) {
-  const [currentRoute, setCurrentRoute] = React.useState('Dashboard');
+export default function AppNavigator({
+  onLogout,
+  currentUser,
+}: AppNavigatorProps) {
+  const [currentRoute, setCurrentRoute] = React.useState("Dashboard");
   const isDesktop = isWeb && isLargeScreen();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(isDesktop);
   const navigationRef = React.useRef<any>(null);
-  const sidebarWidth = React.useRef(new Animated.Value(isDesktop ? 280 : 0)).current;
+  const sidebarWidth = React.useRef(
+    new Animated.Value(isDesktop ? 280 : 0),
+  ).current;
   const overlayOpacity = React.useRef(new Animated.Value(0)).current;
 
   // Filtrer les menuItems selon le rôle de l'utilisateur
@@ -38,7 +51,7 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
 
     const userRoleDisplay = getRoleDisplayName(currentUser);
 
-    return menuItems.filter(item => {
+    return menuItems.filter((item) => {
       // Si l'item n'a pas de restriction de rôles, il est visible pour tous
       if (!item.roles || item.roles.length === 0) {
         return true;
@@ -51,10 +64,10 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
 
   // Déterminer l'écran initial selon le rôle
   const initialRouteName = React.useMemo(() => {
-    if (hasRole(currentUser, 'candidat')) {
-      return 'CandidatDocuments';
+    if (hasRole(currentUser, "candidat")) {
+      return "CandidatDocuments";
     }
-    return 'Dashboard';
+    return "Dashboard";
   }, [currentUser]);
 
   React.useEffect(() => {
@@ -70,19 +83,19 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
         duration: 500,
         easing: Easing.bezier(0.25, 0.1, 0.25, 1),
         useNativeDriver: false,
-      })
+      }),
     ]).start();
   }, [isSidebarOpen, isDesktop]);
 
   const handleSettings = () => {
     if (navigationRef.current) {
-      navigationRef.current.navigate('Settings');
+      navigationRef.current.navigate("Settings");
     }
   };
 
   const handleProfile = () => {
     // TODO: Navigate to profile screen when it exists
-    console.log('Navigate to profile');
+    console.log("Navigate to profile");
   };
 
   const handleToggleSidebar = () => {
@@ -109,7 +122,7 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
       <View style={styles.container}>
         {/* Sidebar - Desktop: fixed, Mobile: overlay */}
         {isDesktop && (
-          <Animated.View style={{ width: sidebarWidth, overflow: 'hidden' }}>
+          <Animated.View style={{ width: sidebarWidth, overflow: "hidden" }}>
             <Sidebar
               activeScreen={currentRoute}
               menuItems={filteredMenuItems}
@@ -136,39 +149,48 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
           >
             <Stack.Screen
               name="Dashboard"
-              component={currentUser?.isSuperAdmin ? SuperAdminDashboardScreen : DashboardScreen}
-              options={{ title: 'Tableau de bord' }}
+              component={
+                currentUser?.isSuperAdmin
+                  ? SuperAdminDashboardScreen
+                  : DashboardScreen
+              }
+              options={{ title: "Tableau de bord" }}
             />
             <Stack.Screen
               name="Documents"
               component={DocumentsScreen}
-              options={{ title: 'Documents' }}
+              options={{ title: "Documents" }}
             />
             <Stack.Screen
               name="Organization"
-              component={OrganizationScreen}
-              options={{ title: 'Gestion de l\'association' }}
+              component={OrganizationNewScreen}
+              options={{ title: "Gestion de l'association" }}
             />
-            <Stack.Screen
-              name="Courses"
-              options={{ title: 'Cours' }}
-            >
-              {(props) => <CoursesScreen {...props} route={{ ...props.route, params: { ...props.route.params, currentUser } }} />}
+            <Stack.Screen name="Courses" options={{ title: "Cours" }}>
+              {(props) => (
+                <CoursesScreen
+                  {...props}
+                  route={{
+                    ...props.route,
+                    params: { ...props.route.params, currentUser },
+                  }}
+                />
+              )}
             </Stack.Screen>
             <Stack.Screen
               name="CandidatDocuments"
               component={CandidatDocumentsScreen}
-              options={{ title: 'Mes documents' }}
+              options={{ title: "Mes documents" }}
             />
             <Stack.Screen
               name="PendingMembers"
               component={PendingMembersScreen}
-              options={{ title: 'Demandes en attente' }}
+              options={{ title: "Demandes en attente" }}
             />
             <Stack.Screen
               name="Settings"
               component={SettingsScreen}
-              options={{ title: 'Paramètres' }}
+              options={{ title: "Paramètres" }}
             />
           </Stack.Navigator>
         </View>
@@ -178,11 +200,8 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
           <>
             {/* Backdrop */}
             <Animated.View
-              style={[
-                styles.overlay,
-                { opacity: overlayOpacity }
-              ]}
-              pointerEvents={isSidebarOpen ? 'auto' : 'none'}
+              style={[styles.overlay, { opacity: overlayOpacity }]}
+              pointerEvents={isSidebarOpen ? "auto" : "none"}
             >
               <TouchableOpacity
                 style={StyleSheet.absoluteFill}
@@ -202,10 +221,10 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
                       translateX: sidebarWidth.interpolate({
                         inputRange: [0, 280],
                         outputRange: [-280, 0],
-                      })
-                    }
-                  ]
-                }
+                      }),
+                    },
+                  ],
+                },
               ]}
             >
               <Sidebar
@@ -225,26 +244,26 @@ export default function AppNavigator({ onLogout, currentUser }: AppNavigatorProp
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    flexDirection: 'row',
-    backgroundColor: '#f8fafc',
+    flexDirection: "row",
+    backgroundColor: "#f8fafc",
   },
   content: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: "#f8fafc",
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
     zIndex: 999,
   },
   mobileSidebar: {
-    position: 'absolute',
+    position: "absolute",
     left: 0,
     top: 0,
     bottom: 0,
     zIndex: 1000,
-    backgroundColor: '#1a2744',
-    shadowColor: '#000',
+    backgroundColor: "#1a2744",
+    shadowColor: "#000",
     shadowOffset: { width: 2, height: 0 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

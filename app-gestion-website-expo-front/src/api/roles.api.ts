@@ -1,6 +1,6 @@
 import { api } from './apiRequest';
 import { API_CONFIG, ApiResponse, handleApiResponse, getAuthHeaders, fetchWithTimeout } from './config';
-import { UrlApi } from './url.api';
+import { API_ROUTES } from './url.api';
 
 // Types pour les rôles
 export interface Role {
@@ -36,14 +36,14 @@ export const RolesApi = {
    * Récupérer tous les rôles (authentifié)
    */
   async getAll(): Promise<ApiResponse<GetRolesResponse>> {
-    const data = await api.get<GetRolesResponse>(UrlApi.rolesApi.getAll);
+    const data = await api.get<GetRolesResponse>(API_ROUTES.roles.list);
     return { success: true, data };
   },
   /**
    * Récupérer les détails d'un rôle (authentifié)
    */
   async getById(id: number): Promise<ApiResponse<{ role: RoleWithPermissions }>> {
-    const data = await api.get<{ role: RoleWithPermissions }>(UrlApi.rolesApi.get.replace(':id', id.toString()));
+    const data = await api.get<{ role: RoleWithPermissions }>(API_ROUTES.roles.get(id));
     return { success: true, data };
   },
 
@@ -51,14 +51,14 @@ export const RolesApi = {
    * Récupérer les rôles assignables par l'utilisateur courant (authentifié)
    */
   async getAssignable(): Promise<ApiResponse<{ roles: Role[] }>> {
-    const data = await api.get<{ roles: Role[] }>(UrlApi.rolesApi.assignable);
+    const data = await api.get<{ roles: Role[] }>(API_ROUTES.roles.assignable);
     return { success: true, data };
   },
   /**
    * Récupérer mes permissions (authentifié)
    */
   async getMyPermissions(): Promise<ApiResponse<{ permissions: Permission[] }>> {
-    const data = await api.get<{ permissions: Permission[] }>(UrlApi.rolesApi.myPermissions);
+    const data = await api.get<{ permissions: Permission[] }>(API_ROUTES.roles.myPermissions);
     return { success: true, data };
   },
 
@@ -66,7 +66,7 @@ export const RolesApi = {
    * Récupérer toutes les permissions disponibles (authentifié)
    */
   async getAllPermissions(): Promise<ApiResponse<{ permissions: Permission[] }>> {
-    const data = await api.get<{ permissions: Permission[] }>(UrlApi.rolesApi.permissions);
+    const data = await api.get<{ permissions: Permission[] }>(API_ROUTES.roles.permissions);
     return { success: true, data };
   },
 };

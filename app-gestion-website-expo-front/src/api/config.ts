@@ -1,21 +1,23 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Configuration de l'API
 export const API_CONFIG = {
   // URL de base de l'API - à modifier selon votre environnement
-  BASE_URL: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api/v1',
+  BASE_URL: process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api/v1",
 
-  // Timeout des requêtes (en millisecondes) - réduit à 5 secondes
-  TIMEOUT: 5000,
+  // Timeout des requêtes (en millisecondes) - réduit à 10 secondes
+  TIMEOUT: 10000,
 
   // Headers par défaut
   DEFAULT_HEADERS: {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
+    "Content-Type": "application/json",
+    Accept: "application/json",
   },
 };
 
-// Types pour les réponses de l'API
+// ========================================
+// TYPES
+// ========================================
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -34,15 +36,27 @@ export interface PaginatedResponse<T> {
   };
 }
 
-// Classe pour gérer les erreurs API
+// ========================================
+// API ERROR CLASS
+// ========================================
 export class ApiError extends Error {
   constructor(
     message: string,
     public statusCode?: number,
-    public data?: any
+    public code?: string,
+    public data?: any,
   ) {
     super(message);
-    this.name = 'ApiError';
+    this.name = "ApiError";
+  }
+
+  static fromResponse(data: any, status: number): ApiError {
+    return new ApiError(
+      data.massage || "Une erreur est survenue",
+      status,
+      data.code || "API_ERROR",
+      data,
+    );
   }
 }
 
@@ -51,7 +65,7 @@ export const getAuthHeaders = (token?: string): HeadersInit => {
   const headers: HeadersInit = { ...API_CONFIG.DEFAULT_HEADERS };
 
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
   return headers;
@@ -61,7 +75,7 @@ export const getAuthHeaders = (token?: string): HeadersInit => {
 export const fetchWithTimeout = async (
   url: string,
   options: RequestInit = {},
-  timeout: number = API_CONFIG.TIMEOUT
+  timeout: number = API_CONFIG.TIMEOUT,
 ): Promise<Response> => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -75,8 +89,8 @@ export const fetchWithTimeout = async (
     return response;
   } catch (error: any) {
     clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new ApiError('La requête a expiré. Vérifiez votre connexion.', 408);
+    if (error.name === "AbortError") {
+      throw new ApiError("La requête a expiré. Vérifiez votre connexion.", 408);
     }
     throw error;
   }
@@ -86,9 +100,9 @@ export const fetchWithTimeout = async (
 export const apiRequest = async (
   url: string,
   options: RequestInit = {},
-  timeout: number = API_CONFIG.TIMEOUT
+  timeout: number = API_CONFIG.TIMEOUT,
 ): Promise<Response> => {
-  const accessToken = await AsyncStorage.getItem('accessToken');
+  const accessToken = await AsyncStorage.getItem("accessToken");
 
   const makeRequest = () =>
     fetchWithTimeout(
@@ -101,7 +115,7 @@ export const apiRequest = async (
           ...options.headers,
         },
       },
-      timeout
+      timeout,
     );
 
   const response = await makeRequest();
@@ -110,7 +124,7 @@ export const apiRequest = async (
   if (response.status === 401) {
     // Créer une fonction de retry qui récupère le nouveau token
     const retryRequest = async () => {
-      const newToken = await AsyncStorage.getItem('accessToken');
+      const newToken = await AsyncStorage.getItem("accessToken");
       return fetchWithTimeout(
         url,
         {
@@ -121,7 +135,7 @@ export const apiRequest = async (
             ...options.headers,
           },
         },
-        timeout
+        timeout,
       );
     };
 
@@ -150,26 +164,26 @@ function onTokenRefreshed(token: string) {
 }
 
 async function refreshAccessToken(): Promise<string> {
-  const refreshToken = await AsyncStorage.getItem('refreshToken');
+  const refreshToken = await AsyncStorage.getItem("refreshToken");
 
   if (!refreshToken) {
-    throw new Error('No refresh token');
+    throw new Error("No refresh token");
   }
 
-  console.log('🔄 Refreshing access token...');
+  console.log("🔄 Refreshing access token...");
 
   const response = await fetch(`${API_CONFIG.BASE_URL}/auth/refresh`, {
-    method: 'POST',
+    method: "POST",
     headers: API_CONFIG.DEFAULT_HEADERS,
     body: JSON.stringify({ refreshToken }),
   });
 
   if (!response.ok) {
     // Refresh token expiré → déconnecter
-    console.error('❌ Refresh token expired');
-    await AsyncStorage.removeItem('accessToken');
-    await AsyncStorage.removeItem('refreshToken');
-    throw new Error('Session expired');
+    console.error("❌ Refresh token expired");
+    await AsyncStorage.removeItem("accessToken");
+    await AsyncStorage.removeItem("refreshToken");
+    throw new Error("Session expired");
   }
 
   const data = await response.json();
@@ -178,20 +192,20 @@ async function refreshAccessToken(): Promise<string> {
     const newAccessToken = data.data.accessToken.value;
     const newRefreshToken = data.data.refreshToken.value;
 
-    await AsyncStorage.setItem('accessToken', newAccessToken);
-    await AsyncStorage.setItem('refreshToken', newRefreshToken);
+    await AsyncStorage.setItem("accessToken", newAccessToken);
+    await AsyncStorage.setItem("refreshToken", newRefreshToken);
 
-    console.log('✅ Token refreshed successfully');
+    console.log("✅ Token refreshed successfully");
     return newAccessToken;
   }
 
-  throw new Error('Invalid refresh response');
+  throw new Error("Invalid refresh response");
 }
 
 // Fonction utilitaire pour gérer les réponses de l'API
 export const handleApiResponse = async <T>(
   response: Response,
-  retryRequest?: () => Promise<Response>
+  retryRequest?: () => Promise<Response>,
 ): Promise<ApiResponse<T>> => {
   // Récupérer la fonction de retry attachée par apiRequest si elle existe
   const retry = retryRequest || (response as any).__retryRequest;
@@ -212,8 +226,8 @@ export const handleApiResponse = async <T>(
       } catch (error) {
         isRefreshing = false;
         throw new ApiError(
-          'Votre session a expiré. Veuillez vous reconnecter.',
-          401
+          "Votre session a expiré. Veuillez vous reconnecter.",
+          401,
         );
       }
     } else {
@@ -235,9 +249,9 @@ export const handleApiResponse = async <T>(
     const errorData = await response.json().catch(() => ({}));
 
     throw new ApiError(
-      errorData.message || 'Une erreur est survenue',
+      errorData.message || "Une erreur est survenue",
       response.status,
-      errorData
+      errorData,
     );
   }
 
