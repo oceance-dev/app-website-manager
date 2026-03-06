@@ -69,7 +69,7 @@ export interface User {
     lastname: string;
     firstname: string;
     email: string;
-    role: UserRole | string; // Support both old string format and new object format
+    role: UserRole;
     statut: 'Actif' | 'Inactif';
     dateOfbirth?: string;
     sexe?: number;

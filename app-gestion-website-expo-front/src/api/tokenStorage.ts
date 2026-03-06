@@ -7,6 +7,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
+import { User } from "../types";
 
 const TOKEN_KEYS = {
   ACCESS: "cadep_access_token",
@@ -19,24 +20,6 @@ export interface AuthTokens {
   accessToken: string;
   refreshToken: string;
   expiresAt: string;
-}
-
-export interface User {
-  id: number;
-  email: string;
-  firstname: string;
-  lastname: string;
-  phone: string;
-  role: {
-    id: number;
-    name: string;
-    displayName: string;
-    level: number;
-  };
-  permissions: string[];
-  isSuperAdmin: boolean;
-  isAdmin: boolean;
-  associationId: number | null;
 }
 
 // Storage WRAPPER

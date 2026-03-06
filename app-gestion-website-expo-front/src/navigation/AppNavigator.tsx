@@ -8,7 +8,7 @@ import {
   Easing,
   PanResponder,
 } from "react-native";
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, NavigationContainerRef } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import DashboardScreen from "../screens/DashboardScreen";
 import SuperAdminDashboardScreen from "../screens/SuperAdminDashboardScreen";
@@ -21,7 +21,7 @@ import PendingMembersScreen from "../screens/PendingMembersScreen";
 import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 import { RootStackParamList, User } from "../types";
-import { menuItems } from "../data/mockData";
+import { menuItems } from "./menuItems";
 import { isWeb, isLargeScreen } from "../utils/responsive";
 import { getRoleDisplayName, getRoleName, hasRole } from "../utils/roleUtils";
 
@@ -39,7 +39,7 @@ export default function AppNavigator({
   const [currentRoute, setCurrentRoute] = React.useState("Dashboard");
   const isDesktop = isWeb && isLargeScreen();
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(isDesktop);
-  const navigationRef = React.useRef<any>(null);
+  const navigationRef = React.useRef<NavigationContainerRef<RootStackParamList>>(null);
   const sidebarWidth = React.useRef(
     new Animated.Value(isDesktop ? 280 : 0),
   ).current;
@@ -142,7 +142,7 @@ export default function AppNavigator({
             onToggleSidebar={handleToggleSidebar}
           />
           <Stack.Navigator
-            initialRouteName={initialRouteName as any}
+            initialRouteName={initialRouteName as keyof RootStackParamList}
             screenOptions={{
               headerShown: false,
             }}

@@ -231,14 +231,14 @@ export async function apiRequest<T = unknown>(
     }
 
     return data.data as T;
-  } catch (error: any) {
+  } catch (error: unknown) {
     clearTimeout(timeoutId);
 
     if (error instanceof ApiError) {
       throw error;
     }
 
-    if (error.name === "AbortError") {
+    if (error instanceof Error && error.name === "AbortError") {
       throw new ApiError(
         "La requête a expiré. Vérifiez votre connexion.",
         408,
@@ -263,7 +263,7 @@ export const api = {
   get: <T = unknown>(endpoint: string, options?: RequestOptions) =>
     apiRequest<T>(endpoint, { ...options, method: "GET" }),
 
-  post: <T = unknown>(endpoint: string, body?: any, options?: RequestOptions) =>
+  post: <T = unknown>(endpoint: string, body?: Record<string, unknown> | FormData, options?: RequestOptions) =>
     apiRequest<T>(endpoint, { ...options, method: "POST", body }),
 
   put: <T = unknown>(

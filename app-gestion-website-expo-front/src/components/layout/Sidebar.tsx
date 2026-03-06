@@ -41,7 +41,7 @@ export default function Sidebar({ activeScreen, menuItems, onNavigate, onLogout 
   const paddingTop = isDesktop ? 0 : Platform.OS === 'ios' ? 50 : (StatusBar.currentHeight || 0) + 10;
 
   return (
-    <View style={[styles.container, isDesktop && styles.containerDesktop, { paddingTop }]}>
+    <View style={[styles.container, { paddingTop }]}>
       {/* Logo Header */}
       <View style={styles.logoContainer}>
         <Logo size="medium" showText={true} variant="dark" />
